@@ -80,10 +80,12 @@
 ### 3. build-ova.yml
 - 基于 Alpine Linux cloud image 构建
 - 预装 Docker 和相关镜像
+- 预装 open-vm-tools（VMware 集成）和 qemu-guest-agent（KVM/Proxmox 集成）
 - 使用 virt-customize 定制系统
 - 生成 OVA/QCOW2/VHD 三种格式
 - 随机生成 root 密码和 SSH 端口
 - 自动发布到 GitHub Releases
+- OVF 格式使用标准 1.0 规范，兼容 ESXi 6.7+、VirtualBox、深信服等平台
 
 ## 环境变量
 
