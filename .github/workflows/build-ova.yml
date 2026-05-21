@@ -95,7 +95,7 @@ jobs:
           SSH_PORT: ${{ steps.meta.outputs.ssh_port }}
         run: |
           set +e
-          sudo -E virt-customize --no-network --format qcow2 -a ova-build/alpine.qcow2 \
+          sudo -E virt-customize -v -x --no-network --format qcow2 -a ova-build/alpine.qcow2 \
             --root-password "password:${ROOT_PASSWORD}" \
             --copy-in ova-build/apks:/tmp \
             --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
