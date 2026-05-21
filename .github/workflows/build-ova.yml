@@ -129,8 +129,8 @@ jobs:
             --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
             --run-command "sh /tmp/resize-root.sh" \
             --run-command "rc-update add docker default" \
-            --run-command "if command -v vmtoolsd >/dev/null 2>&1; then rc-update add open-vm-tools boot; fi" \
-            --run-command "if command -v qemu-ga >/dev/null 2>&1; then rc-update add qemu-guest-agent default; fi" \
+            --run-command "rc-update add open-vm-tools default || true" \
+            --run-command "rc-update add qemu-guest-agent default || true" \
             --run-command "sed -i 's/^#\\?Port .*/Port ${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config" \
