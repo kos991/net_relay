@@ -39,18 +39,8 @@ jobs:
             release_tag="ova-$(date -u +%Y%m%d%H%M%S)"
           fi
 
-          root_password="$(python3 - <<'PY'
-import secrets
-import string
-alphabet = string.ascii_letters + string.digits
-print("".join(secrets.choice(alphabet) for _ in range(20)))
-PY
-)"
-          ssh_port="$(python3 - <<'PY'
-import secrets
-print(secrets.randbelow(45536) + 20000)
-PY
-)"
+          root_password="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20)"
+          ssh_port="$(shuf -i 20000-65535 -n 1)"
 
           {
             echo "release_tag=${release_tag}"
@@ -79,14 +69,15 @@ PY
       - name: Customize Alpine image
         env:
           ROOT_PASSWORD: ${{ steps.meta.outputs.root_password }}
+          SSH_PORT: ${{ steps.meta.outputs.ssh_port }}
         run: |
           sudo virt-customize -a ova-build/alpine.qcow2 \
             --root-password "password:${ROOT_PASSWORD}" \
             --run-command "printf '%s\n%s\n' 'https://dl-cdn.alpinelinux.org/alpine/v3.23/main' 'https://dl-cdn.alpinelinux.org/alpine/v3.23/community' > /etc/apk/repositories" \
             --run-command "apk update" \
-            --run-command "apk add --no-cache bash curl git docker docker-cli-compose ca-certificates openssl" \
+            --run-command "apk add --no-cache bash curl git docker docker-cli-compose ca-certificates openssl openssh" \
             --run-command "rc-update add docker default" \
-            --run-command "sed -i 's/^#\\?Port .*/Port ${{ steps.meta.outputs.ssh_port }}/' /etc/ssh/sshd_config" \
+            --run-command "sed -i 's/^#\\?Port .*/Port ${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config" \
             --run-command "rc-update add sshd default" \
