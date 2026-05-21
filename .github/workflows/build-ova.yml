@@ -145,8 +145,10 @@ jobs:
               <Disk ovf:diskId="disk1" ovf:fileRef="file1" ovf:capacity="8" ovf:capacityAllocationUnits="byte * 2^30" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
             </DiskSection>
             <NetworkSection>
-              <Info>Network information</Info>
-              <Network ovf:name="VM Network"/>
+              <Info>Logical networks used in the package</Info>
+              <Network ovf:name="VM Network">
+                <Description>The VM Network network</Description>
+              </Network>
             </NetworkSection>
             <VirtualSystem ovf:id="net-relay-alpine">
               <Info>NetBird Relay Alpine OVA</Info>
@@ -178,12 +180,11 @@ jobs:
                   <rasd:VirtualQuantity>1024</rasd:VirtualQuantity>
                 </Item>
                 <Item>
-                  <rasd:AddressOnParent>0</rasd:AddressOnParent>
-                  <rasd:Connection>VM Network</rasd:Connection>
-                  <rasd:Description>E1000 network adapter</rasd:Description>
-                  <rasd:ElementName>Ethernet 1</rasd:ElementName>
                   <rasd:InstanceID>3</rasd:InstanceID>
+                  <rasd:ElementName>Network Adapter 1</rasd:ElementName>
                   <rasd:ResourceType>10</rasd:ResourceType>
+                  <rasd:AddressOnParent>1</rasd:AddressOnParent>
+                  <rasd:Connection>VM Network</rasd:Connection>
                 </Item>
                 <Item>
                   <rasd:Description>Disk</rasd:Description>
