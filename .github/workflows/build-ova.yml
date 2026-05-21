@@ -179,8 +179,6 @@ jobs:
                   <rasd:ElementName>Network adapter</rasd:ElementName>
                   <rasd:InstanceID>3</rasd:InstanceID>
                   <rasd:ResourceType>10</rasd:ResourceType>
-                  <rasd:Connection>VM Network</rasd:Connection>
-                  <rasd:ResourceSubType>E1000</rasd:ResourceSubType>
                 </Item>
                 <Item>
                   <rasd:Description>Disk</rasd:Description>
