@@ -154,7 +154,7 @@ jobs:
                   <vssd:ElementName xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData">Virtual Hardware Family</vssd:ElementName>
                   <vssd:InstanceID xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData">0</vssd:InstanceID>
                   <vssd:VirtualSystemIdentifier xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData">net-relay-alpine</vssd:VirtualSystemIdentifier>
-                  <vssd:VirtualSystemType xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData">vmx-07</vssd:VirtualSystemType>
+                  <vssd:VirtualSystemType xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData">vmx-11</vssd:VirtualSystemType>
                 </System>
                 <Item>
                   <rasd:Description>1 virtual CPU</rasd:Description>
