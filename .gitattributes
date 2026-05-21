@@ -2,4 +2,5 @@
 Dockerfile text eol=lf
 README.md text eol=lf
 .gitignore text eol=lf
-
+.github/workflows/*.yml text eol=lf
+ova/files/* text eol=lf
