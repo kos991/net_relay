@@ -41,7 +41,7 @@ EOF
 chmod +x docker
 export PATH="$TMP_DIR:$PATH"
 
-printf 'relay.example.com\nadmin@example.com\ncf-token\n9443\n53478\nlatest\n60\n\n' | ./setup-relay.sh
+printf 'relay.example.com\nadmin@example.com\ncf-token\n9443\n53478\nlatest\n60\ntest-secret\n' | bash ./setup-relay.sh
 
 test -f .env
 test -f relay.env
@@ -53,8 +53,10 @@ test -f data/relay-certs/privkey.pem
 grep -q '^RELAY_DOMAIN=relay.example.com$' .env
 grep -q '^RELAY_PORT=9443$' .env
 grep -q '^STUN_PORT=53478$' .env
+grep -q '^RELAY_AUTH_SECRET=test-secret$' .env
 grep -q '^NB_EXPOSED_ADDRESS=rels://relay.example.com:9443$' relay.env
 grep -q '^NB_STUN_PORTS=53478$' relay.env
+grep -q '^NB_AUTH_SECRET=test-secret$' relay.env
 grep -q 'dns cloudflare {env.CF_API_TOKEN}' caddy/Caddyfile
 # shellcheck disable=SC2016
 grep -q '"${RELAY_PORT}:${RELAY_PORT}/tcp"' docker-compose.yml

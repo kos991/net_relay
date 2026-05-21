@@ -67,7 +67,7 @@ prompt_secret() {
   local prompt="$1"
   local value=""
   read -r -s -p "$prompt" value
-  echo
+  printf '\n' >&2
   value="$(trim "$value")"
   printf '%s' "$value"
 }
