@@ -82,6 +82,7 @@ jobs:
           ROOT_PASSWORD: ${{ steps.meta.outputs.root_password }}
           SSH_PORT: ${{ steps.meta.outputs.ssh_port }}
         run: |
+          set +e
           sudo -E virt-customize --format qcow2 -a ova-build/alpine.qcow2 \
             --root-password "password:${ROOT_PASSWORD}" \
             --run-command "printf '%s\n%s\n' 'https://dl-cdn.alpinelinux.org/alpine/v3.23/main' 'https://dl-cdn.alpinelinux.org/alpine/v3.23/community' > /etc/apk/repositories" \
@@ -98,7 +99,15 @@ jobs:
             --copy-in ova/files/net-relay-firstboot:/usr/local/sbin \
             --copy-in ova/files/root-profile:/root \
             --run-command "chmod +x /usr/local/sbin/net-relay-firstboot /opt/netbird-relay-installer/setup-relay.sh" \
-            --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile"
+            --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile" 2>&1 | tee ova-build/virt-customize.log
+          status="${PIPESTATUS[0]}"
+          if [ "$status" -ne 0 ]; then
+            {
+              echo "virt-customize failed with exit code ${status}"
+              tail -n 80 ova-build/virt-customize.log
+            } | python3 -c 'import sys; print("::error::" + sys.stdin.read().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+            exit "$status"
+          fi
 
       - name: Package release images
         run: |
