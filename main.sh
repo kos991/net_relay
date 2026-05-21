@@ -8,7 +8,6 @@ if command -v curl >/dev/null 2>&1; then
 elif command -v wget >/dev/null 2>&1; then
   wget -qO- "$INSTALL_URL" | bash
 else
-  echo "Need curl or wget to run installer." >&2
+  echo "需要安装 curl 或 wget 后再执行。" >&2
   exit 1
 fi
-

@@ -15,14 +15,14 @@ bash <(curl -sSL https://rels.jinfei.org/main.sh)
 ## 安装时填写
 
 ```text
-Relay domain: Relay 域名
-ACME email: 证书邮箱
-Cloudflare API token: Cloudflare API Token
-Relay TCP port: Relay 端口，默认 8443
-STUN UDP port: STUN 端口，默认 3478
-Relay image tag: 默认 latest
-Cert sync interval: 默认 60
-Auth secret: 留空自动生成
+请输入 Relay 域名: Relay 域名
+请输入证书邮箱: 证书申请邮箱
+请输入 Cloudflare API Token: Cloudflare API Token
+请输入 Relay TCP 端口 [8443]: Relay 端口
+请输入 STUN UDP 端口 [3478]: STUN 端口
+请输入 Relay 镜像标签 [latest]: 默认 latest
+请输入证书同步间隔秒数 [60]: 默认 60
+请输入共享密钥，留空自动生成: 留空自动生成
 ```
 
 ## 主服务器配置

@@ -44,7 +44,7 @@ restart_relay() {
     >/dev/null
 }
 
-log "watching Caddy storage for ${RELAY_DOMAIN}"
+log "正在监听 Caddy 证书目录：${RELAY_DOMAIN}"
 
 while true; do
   src_cert="$(find_source_file crt || true)"
@@ -57,26 +57,25 @@ while true; do
     dst_key_hash="$(hash_file "$TARGET_KEY")"
 
     if [[ "$src_cert_hash" != "$dst_cert_hash" || "$src_key_hash" != "$dst_key_hash" ]]; then
-      log "certificate update detected"
+      log "检测到证书更新"
       mkdir -p /relay-certs
       copy_atomic "$src_cert" "$TARGET_CERT" 0644
       copy_atomic "$src_key" "$TARGET_KEY" 0600
-      log "certificate synced to Relay mount"
+      log "证书已同步到 Relay"
 
       if curl --silent --show-error --fail \
         --unix-socket /var/run/docker.sock \
         "http://localhost/containers/${RELAY_CONTAINER_NAME}/json" \
         >/dev/null 2>&1; then
-        log "restarting ${RELAY_CONTAINER_NAME}"
+        log "正在重启 ${RELAY_CONTAINER_NAME}"
         restart_relay
       else
-        log "relay container not created yet, skip restart"
+        log "Relay 容器尚未创建，跳过重启"
       fi
     fi
   else
-    log "certificate not available yet"
+    log "证书尚未就绪"
   fi
 
   sleep "$SYNC_INTERVAL"
 done
-

@@ -26,7 +26,7 @@ fail() {
 
 need_root_for_install_dir() {
   if [[ "${EUID}" -ne 0 && "$INSTALL_DIR" == /opt/* ]]; then
-    fail "Run as root, or set INSTALL_DIR to a writable path."
+    fail "请使用 root 执行，或通过 INSTALL_DIR 指定当前用户可写目录。"
   fi
 }
 
@@ -39,7 +39,7 @@ download_with_tarball() {
   elif command -v wget >/dev/null 2>&1; then
     wget -qO "$tmp_dir/repo.tar.gz" "$ARCHIVE_URL"
   else
-    fail "Need git, curl, or wget to download the installer."
+    fail "需要安装 git、curl 或 wget 之一，用于下载安装器。"
   fi
 
   rm -rf "$INSTALL_DIR"
@@ -55,16 +55,16 @@ sync_repo() {
 
   if command -v git >/dev/null 2>&1; then
     if [[ -d "$INSTALL_DIR/.git" ]]; then
-      log "Updating installer in ${INSTALL_DIR} ..."
+      log "正在更新安装器：${INSTALL_DIR}"
       git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
       git -C "$INSTALL_DIR" reset --hard "origin/${BRANCH}"
     else
       rm -rf "$INSTALL_DIR"
-      log "Cloning installer to ${INSTALL_DIR} ..."
+      log "正在下载安装到：${INSTALL_DIR}"
       git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
     fi
   else
-    warn "git not found, downloading source archive instead ..."
+    warn "未检测到 git，改用压缩包下载安装器。"
     download_with_tarball
   fi
 }
@@ -73,7 +73,6 @@ need_root_for_install_dir
 sync_repo
 chmod +x "$INSTALL_DIR/setup-relay.sh"
 
-log "Running installer from ${INSTALL_DIR} ..."
+log "正在启动安装器：${INSTALL_DIR}"
 cd "$INSTALL_DIR"
 exec ./setup-relay.sh
-
