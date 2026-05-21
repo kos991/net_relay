@@ -56,7 +56,9 @@ grep -q '^STUN_PORT=53478$' .env
 grep -q '^NB_EXPOSED_ADDRESS=rels://relay.example.com:9443$' relay.env
 grep -q '^NB_STUN_PORTS=53478$' relay.env
 grep -q 'dns cloudflare {env.CF_API_TOKEN}' caddy/Caddyfile
+# shellcheck disable=SC2016
 grep -q '"${RELAY_PORT}:${RELAY_PORT}/tcp"' docker-compose.yml
+# shellcheck disable=SC2016
 grep -q '"${STUN_PORT}:${STUN_PORT}/udp"' docker-compose.yml
 grep -q 'docker compose -f .*docker-compose.yml up -d --build caddy sync-relay-certs' docker-calls.log
 grep -q 'docker compose -f .*docker-compose.yml up -d relay' docker-calls.log
