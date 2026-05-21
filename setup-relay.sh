@@ -155,12 +155,30 @@ NB_TLS_KEY_FILE=/certs/privkey.pem
 EOF
 }
 
+write_compose_service_source() {
+  local image_value="$1"
+  local build_context="$2"
+
+  if [[ -n "$image_value" ]]; then
+    cat <<EOF
+    image: ${image_value}
+EOF
+  else
+    cat <<EOF
+    build:
+      context: ${build_context}
+EOF
+  fi
+}
+
 write_compose_file() {
-  cat > "${SCRIPT_DIR}/docker-compose.yml" <<EOF
+  {
+    cat <<EOF
 services:
   caddy:
-    build:
-      context: ./caddy
+EOF
+    write_compose_service_source "${CADDY_IMAGE:-}" "./caddy"
+    cat <<EOF
     container_name: netbird-caddy-cert
     restart: unless-stopped
     environment:
@@ -171,8 +189,9 @@ services:
       - ./data/caddy-config:/config
 
   sync-relay-certs:
-    build:
-      context: ./sync
+EOF
+    write_compose_service_source "${SYNC_IMAGE:-}" "./sync"
+    cat <<EOF
     container_name: netbird-relay-cert-sync
     restart: unless-stopped
     environment:
@@ -202,6 +221,7 @@ services:
       - caddy
       - sync-relay-certs
 EOF
+  } > "${SCRIPT_DIR}/docker-compose.yml"
 }
 
 write_caddyfile() {

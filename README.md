@@ -50,3 +50,16 @@ docker compose ps
 docker compose logs -f caddy sync-relay-certs relay
 docker compose restart relay
 ```
+
+## OVA 镜像
+
+GitHub Releases 会提供 Alpine OVA 镜像。  
+每个 OVA Release 的说明里会写入随机 root 密码。
+
+支持常见虚拟化平台导入：
+
+- VMware ESXi / Workstation
+- VirtualBox
+- Proxmox VE，必要时解包 OVA 后导入 VMDK
+
+OVA 只是预装 Docker、Relay 相关镜像和首次启动向导；上面的一键脚本入口仍然保留。

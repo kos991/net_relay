@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+FLAG="/var/lib/net-relay/firstboot.done"
+IMAGE_FLAG="/var/lib/net-relay/images.loaded"
+INSTALLER_DIR="/opt/netbird-relay-installer"
+IMAGE_TAR="/opt/net-relay/docker-images.tar"
+
+if [[ -f "$FLAG" ]]; then
+  exit 0
+fi
+
+clear || true
+echo "================================================="
+echo "          NetBird Relay OVA 首次启动向导"
+echo "================================================="
+echo
+echo "本镜像已内置 Docker 镜像，首次启动只需要填写参数。"
+echo
+
+rc-service docker start >/dev/null 2>&1 || true
+
+if [[ ! -f "$IMAGE_FLAG" ]]; then
+  echo "正在加载内置 Docker 镜像，请稍候..."
+  docker load -i "$IMAGE_TAR"
+  mkdir -p "$(dirname "$IMAGE_FLAG")"
+  touch "$IMAGE_FLAG"
+fi
+
+cd "$INSTALLER_DIR"
+CADDY_IMAGE="net-relay-caddy:ova" \
+SYNC_IMAGE="net-relay-sync:ova" \
+bash ./setup-relay.sh
+
+mkdir -p "$(dirname "$FLAG")"
+touch "$FLAG"
+

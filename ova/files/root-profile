@@ -1,0 +1,4 @@
+if [ -x /usr/local/sbin/net-relay-firstboot ] && [ ! -f /var/lib/net-relay/firstboot.done ]; then
+  /usr/local/sbin/net-relay-firstboot
+fi
+

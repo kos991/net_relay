@@ -1,0 +1,236 @@
+name: build-ova
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag, empty means ova-YYYYmmddHHMMSS"
+        required: false
+        default: ""
+      relay_image:
+        description: "NetBird relay image to preload"
+        required: false
+        default: "netbirdio/relay:latest"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ALPINE_IMAGE_URL: https://dev.alpinelinux.org/~tomalok/alpine-cloud-images/v3.23/nocloud/x86_64/nocloud_alpine-3.23.2-x86_64-bios-tiny-r0.qcow2
+      OVA_NAME: net-relay-alpine-x86_64.ova
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-utils libguestfs-tools
+
+      - name: Generate release metadata
+        id: meta
+        run: |
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            release_tag="${{ inputs.release_tag }}"
+          else
+            release_tag="ova-$(date -u +%Y%m%d%H%M%S)"
+          fi
+
+          root_password="$(python3 - <<'PY'
+import secrets
+import string
+alphabet = string.ascii_letters + string.digits
+print("".join(secrets.choice(alphabet) for _ in range(20)))
+PY
+)"
+          ssh_port="$(python3 - <<'PY'
+import secrets
+print(secrets.randbelow(45536) + 20000)
+PY
+)"
+
+          {
+            echo "release_tag=${release_tag}"
+            echo "root_password=${root_password}"
+            echo "ssh_port=${ssh_port}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build local Docker image archive
+        run: |
+          mkdir -p ova-build
+          docker build -t net-relay-caddy:ova ./caddy
+          docker build -t net-relay-sync:ova ./sync
+          docker pull "${{ inputs.relay_image }}"
+          docker save "${{ inputs.relay_image }}" net-relay-caddy:ova net-relay-sync:ova -o ova-build/docker-images.tar
+
+      - name: Prepare installer payload
+        run: |
+          mkdir -p ova-build/netbird-relay-installer
+          cp -a caddy sync setup-relay.sh install.sh main.sh README.md .gitignore .gitattributes ova-build/netbird-relay-installer/
+
+      - name: Download Alpine cloud image
+        run: |
+          curl -fsSL "$ALPINE_IMAGE_URL" -o ova-build/alpine.qcow2
+          qemu-img resize ova-build/alpine.qcow2 8G
+
+      - name: Customize Alpine image
+        env:
+          ROOT_PASSWORD: ${{ steps.meta.outputs.root_password }}
+        run: |
+          sudo virt-customize -a ova-build/alpine.qcow2 \
+            --root-password "password:${ROOT_PASSWORD}" \
+            --run-command "printf '%s\n%s\n' 'https://dl-cdn.alpinelinux.org/alpine/v3.23/main' 'https://dl-cdn.alpinelinux.org/alpine/v3.23/community' > /etc/apk/repositories" \
+            --run-command "apk update" \
+            --run-command "apk add --no-cache bash curl git docker docker-cli-compose ca-certificates openssl" \
+            --run-command "rc-update add docker default" \
+            --run-command "sed -i 's/^#\\?Port .*/Port ${{ steps.meta.outputs.ssh_port }}/' /etc/ssh/sshd_config" \
+            --run-command "sed -i 's/^#\\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config" \
+            --run-command "sed -i 's/^#\\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config" \
+            --run-command "rc-update add sshd default" \
+            --mkdir /opt/net-relay \
+            --copy-in ova-build/docker-images.tar:/opt/net-relay \
+            --copy-in ova-build/netbird-relay-installer:/opt \
+            --copy-in ova/files/net-relay-firstboot:/usr/local/sbin \
+            --copy-in ova/files/root-profile:/root \
+            --run-command "chmod +x /usr/local/sbin/net-relay-firstboot /opt/netbird-relay-installer/setup-relay.sh" \
+            --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile"
+
+      - name: Package OVA
+        run: |
+          mkdir -p release
+          qemu-img convert -p -O vmdk -o subformat=streamOptimized,adapter_type=lsilogic ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vmdk
+          vmdk_size="$(stat -c%s release/net-relay-alpine-x86_64.vmdk)"
+
+          cat > release/net-relay-alpine-x86_64.ovf <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1" xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" xmlns:vmw="http://www.vmware.com/schema/ovf">
+            <References>
+              <File ovf:id="file1" ovf:href="net-relay-alpine-x86_64.vmdk" ovf:size="${vmdk_size}"/>
+            </References>
+            <DiskSection>
+              <Info>Virtual disk information</Info>
+              <Disk ovf:diskId="disk1" ovf:fileRef="file1" ovf:capacity="8" ovf:capacityAllocationUnits="byte * 2^30" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
+            </DiskSection>
+            <NetworkSection>
+              <Info>Network information</Info>
+              <Network ovf:name="VM Network"/>
+            </NetworkSection>
+            <VirtualSystem ovf:id="net-relay-alpine">
+              <Info>NetBird Relay Alpine OVA</Info>
+              <Name>net-relay-alpine</Name>
+              <OperatingSystemSection ovf:id="94" vmw:osType="otherlinux64Guest">
+                <Info>Alpine Linux</Info>
+              </OperatingSystemSection>
+              <VirtualHardwareSection>
+                <Info>Virtual hardware requirements</Info>
+                <System>
+                  <vssd:ElementName xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData">Virtual Hardware Family</vssd:ElementName>
+                  <vssd:InstanceID xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData">0</vssd:InstanceID>
+                  <vssd:VirtualSystemIdentifier xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData">net-relay-alpine</vssd:VirtualSystemIdentifier>
+                  <vssd:VirtualSystemType xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData">vmx-11</vssd:VirtualSystemType>
+                </System>
+                <Item>
+                  <rasd:Description>1 virtual CPU</rasd:Description>
+                  <rasd:ElementName>1 virtual CPU</rasd:ElementName>
+                  <rasd:InstanceID>1</rasd:InstanceID>
+                  <rasd:ResourceType>3</rasd:ResourceType>
+                  <rasd:VirtualQuantity>1</rasd:VirtualQuantity>
+                </Item>
+                <Item>
+                  <rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits>
+                  <rasd:Description>1024MB memory</rasd:Description>
+                  <rasd:ElementName>1024MB memory</rasd:ElementName>
+                  <rasd:InstanceID>2</rasd:InstanceID>
+                  <rasd:ResourceType>4</rasd:ResourceType>
+                  <rasd:VirtualQuantity>1024</rasd:VirtualQuantity>
+                </Item>
+                <Item>
+                  <rasd:Description>Network adapter</rasd:Description>
+                  <rasd:ElementName>Network adapter</rasd:ElementName>
+                  <rasd:InstanceID>3</rasd:InstanceID>
+                  <rasd:ResourceType>10</rasd:ResourceType>
+                  <rasd:Connection>VM Network</rasd:Connection>
+                  <rasd:ResourceSubType>E1000</rasd:ResourceSubType>
+                </Item>
+                <Item>
+                  <rasd:Description>Disk</rasd:Description>
+                  <rasd:ElementName>Disk</rasd:ElementName>
+                  <rasd:HostResource>ovf:/disk/disk1</rasd:HostResource>
+                  <rasd:InstanceID>4</rasd:InstanceID>
+                  <rasd:ResourceType>17</rasd:ResourceType>
+                </Item>
+              </VirtualHardwareSection>
+            </VirtualSystem>
+          </Envelope>
+          EOF
+
+          tar -C release -cf "release/${OVA_NAME}" net-relay-alpine-x86_64.ovf net-relay-alpine-x86_64.vmdk
+          (cd release && sha256sum "$OVA_NAME" > SHA256SUMS)
+
+      - name: Write release notes
+        run: |
+          cat > release/RELEASE_NOTES.md <<EOF
+          # NetBird Relay Alpine OVA
+
+          ## Login
+
+          - Username: root
+          - Random password: ${{ steps.meta.outputs.root_password }}
+          - SSH port: ${{ steps.meta.outputs.ssh_port }}
+
+          The first root login starts the Chinese NetBird Relay setup wizard.
+
+          ## Virtualization support
+
+          This OVA uses generic OVF plus streamOptimized VMDK:
+
+          - VMware ESXi / Workstation: import the OVA directly
+          - VirtualBox: import the OVA directly
+          - Proxmox VE: if direct import fails, extract the OVA and import the VMDK
+
+          The default network uses DHCP. After import, make sure the VM can access Cloudflare API and GitHub.
+
+          SSH is enabled by default with password login for first access.
+
+          Open or forward these ports for external access:
+
+          - SSH TCP port: ${{ steps.meta.outputs.ssh_port }}/tcp
+          - Relay TCP port, for example 8443/tcp
+          - STUN UDP port, for example 3478/udp
+
+          ## Included
+
+          - Alpine Linux 3.23
+          - Docker and Docker Compose
+          - ${{ inputs.relay_image }}
+          - net-relay-caddy:ova
+          - net-relay-sync:ova
+
+          ## Recommended after first login
+
+          \`\`\`bash
+          passwd
+          \`\`\`
+
+          ## One-line installer
+
+          \`\`\`bash
+          bash <(curl -sSL https://rels.jinfei.org/main.sh)
+          \`\`\`
+          EOF
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.meta.outputs.release_tag }}"
+          git tag "$tag"
+          git push origin "$tag"
+          gh release create "$tag" \
+            --title "$tag" \
+            --notes-file release/RELEASE_NOTES.md \
+            "release/${OVA_NAME}" \
+            release/SHA256SUMS
