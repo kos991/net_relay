@@ -76,7 +76,15 @@ jobs:
               "https://dl-cdn.alpinelinux.org/alpine/v3.23/main" \
               "https://dl-cdn.alpinelinux.org/alpine/v3.23/community" > /etc/apk/repositories
             apk update
-            apk fetch --recursive --output /out bash curl git docker docker-openrc docker-cli-compose ca-certificates openssl openssh open-vm-tools qemu-guest-agent
+            echo "Fetching packages..."
+            apk fetch --recursive --output /out bash curl git docker docker-openrc docker-cli-compose ca-certificates openssl openssh open-vm-tools qemu-guest-agent || {
+              echo "Failed to fetch some packages, checking availability..."
+              apk search open-vm-tools
+              apk search qemu-guest-agent
+              exit 1
+            }
+            echo "Packages fetched successfully"
+            ls -lh /out | head -20
           '
 
       - name: Prepare installer payload
@@ -105,8 +113,8 @@ jobs:
             --copy-in ova-build/apks:/tmp \
             --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
             --run-command "rc-update add docker default" \
-            --run-command "rc-update add open-vm-tools default" \
-            --run-command "rc-update add qemu-guest-agent default" \
+            --run-command "if [ -f /etc/init.d/open-vm-tools ]; then rc-update add open-vm-tools default; fi" \
+            --run-command "if [ -f /etc/init.d/qemu-guest-agent ]; then rc-update add qemu-guest-agent default; fi" \
             --run-command "sed -i 's/^#\\?Port .*/Port ${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config" \
