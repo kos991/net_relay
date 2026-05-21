@@ -22,7 +22,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      ALPINE_IMAGE_URL: https://dev.alpinelinux.org/~tomalok/alpine-cloud-images/v3.23/nocloud/x86_64/nocloud_alpine-3.23.2-x86_64-bios-tiny-r0.qcow2
+      ALPINE_IMAGE_URL: https://dev.alpinelinux.org/~tomalok/alpine-cloud-images/v3.23/nocloud/x86_64/nocloud_alpine-3.23.4-x86_64-bios-cloudinit-r0.qcow2
       OVA_NAME: net-relay-alpine-x86_64.ova
       QCOW2_NAME: net-relay-alpine-x86_64.qcow2.gz
       VHD_NAME: net-relay-alpine-x86_64.vhd.gz
@@ -66,6 +66,18 @@ jobs:
           docker pull "${RELAY_IMAGE}"
           docker save "${RELAY_IMAGE}" net-relay-caddy:ova net-relay-sync:ova -o ova-build/docker-images.tar
 
+      - name: Fetch Alpine packages for offline install
+        run: |
+          mkdir -p ova-build/apks
+          docker run --rm -v "$PWD/ova-build/apks:/out" alpine:3.23 sh -c '
+            set -e
+            printf "%s\n%s\n" \
+              "https://dl-cdn.alpinelinux.org/alpine/v3.23/main" \
+              "https://dl-cdn.alpinelinux.org/alpine/v3.23/community" > /etc/apk/repositories
+            apk update
+            apk fetch --recursive --output /out bash curl git docker docker-cli-compose ca-certificates openssl openssh
+          '
+
       - name: Prepare installer payload
         run: |
           mkdir -p ova-build/netbird-relay-installer
@@ -83,11 +95,10 @@ jobs:
           SSH_PORT: ${{ steps.meta.outputs.ssh_port }}
         run: |
           set +e
-          sudo -E virt-customize --format qcow2 -a ova-build/alpine.qcow2 \
+          sudo -E virt-customize --no-network --format qcow2 -a ova-build/alpine.qcow2 \
             --root-password "password:${ROOT_PASSWORD}" \
-            --run-command "printf '%s\n%s\n' 'https://dl-cdn.alpinelinux.org/alpine/v3.23/main' 'https://dl-cdn.alpinelinux.org/alpine/v3.23/community' > /etc/apk/repositories" \
-            --run-command "apk update" \
-            --run-command "apk add --no-cache bash curl git docker docker-cli-compose ca-certificates openssl openssh" \
+            --copy-in ova-build/apks:/tmp \
+            --run-command "apk add --no-network --allow-untrusted /tmp/apks/*.apk" \
             --run-command "rc-update add docker default" \
             --run-command "sed -i 's/^#\\?Port .*/Port ${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config" \
