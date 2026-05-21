@@ -98,7 +98,7 @@ jobs:
           sudo -E virt-customize --no-network --format qcow2 -a ova-build/alpine.qcow2 \
             --root-password "password:${ROOT_PASSWORD}" \
             --copy-in ova-build/apks:/tmp \
-            --run-command "apk add --no-network --allow-untrusted /tmp/apks/*.apk" \
+            --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
             --run-command "rc-update add docker default" \
             --run-command "sed -i 's/^#\\?Port .*/Port ${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config" \
