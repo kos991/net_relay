@@ -109,6 +109,7 @@ jobs:
             --run-command "sed -i 's/^#\\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config" \
             --run-command "rc-update add sshd default" \
             --mkdir /opt/net-relay \
+            --mkdir /usr/local/sbin \
             --copy-in ova-build/docker-images.tar:/opt/net-relay \
             --copy-in ova-build/netbird-relay-installer:/opt \
             --copy-in ova/files/net-relay-firstboot:/usr/local/sbin \
