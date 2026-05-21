@@ -39,8 +39,8 @@ jobs:
             release_tag="ova-$(date -u +%Y%m%d%H%M%S)"
           fi
 
-          root_password="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20)"
-          ssh_port="$(shuf -i 20000-65535 -n 1)"
+          root_password="$(python3 -c "import secrets,string; alphabet=string.ascii_letters+string.digits; print(''.join(secrets.choice(alphabet) for _ in range(20)))")"
+          ssh_port="$(python3 -c "import secrets; print(secrets.randbelow(45536) + 20000)")"
 
           {
             echo "release_tag=${release_tag}"
