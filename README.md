@@ -28,6 +28,18 @@ chmod +x setup-relay.sh
 ./setup-relay.sh
 ```
 
+Or run the one-line installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kos991/net_relay/main/install.sh | bash
+```
+
+Custom install directory:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kos991/net_relay/main/install.sh | INSTALL_DIR="$HOME/netbird-relay-installer" bash
+```
+
 ## Notes
 
 - No manual certificate file handling is needed.
