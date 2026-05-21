@@ -176,12 +176,12 @@ jobs:
                   <rasd:VirtualQuantity>1024</rasd:VirtualQuantity>
                 </Item>
                 <Item>
-                  <rasd:Description>Network adapter</rasd:Description>
-                  <rasd:ElementName>Network adapter</rasd:ElementName>
+                  <rasd:Address>0</rasd:Address>
+                  <rasd:Description>E1000 Network Adapter</rasd:Description>
+                  <rasd:ElementName>Network adapter 1</rasd:ElementName>
                   <rasd:InstanceID>3</rasd:InstanceID>
                   <rasd:ResourceType>10</rasd:ResourceType>
-                  <rasd:Connection>VM Network</rasd:Connection>
-                  <rasd:ResourceSubType>E1000</rasd:ResourceSubType>
+                  <rasd:AutomaticAllocation>true</rasd:AutomaticAllocation>
                 </Item>
                 <Item>
                   <rasd:Description>Disk</rasd:Description>
