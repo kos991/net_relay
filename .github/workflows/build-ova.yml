@@ -75,7 +75,7 @@ jobs:
               "https://dl-cdn.alpinelinux.org/alpine/v3.23/main" \
               "https://dl-cdn.alpinelinux.org/alpine/v3.23/community" > /etc/apk/repositories
             apk update
-            apk fetch --recursive --output /out bash curl git docker docker-cli-compose ca-certificates openssl openssh
+            apk fetch --recursive --output /out bash curl git docker docker-openrc docker-cli-compose ca-certificates openssl openssh
           '
 
       - name: Prepare installer payload
