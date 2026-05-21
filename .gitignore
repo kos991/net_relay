@@ -1,0 +1,6 @@
+.env
+relay.env
+data/
+certs/
+docker-compose.yml
+caddy/Caddyfile
