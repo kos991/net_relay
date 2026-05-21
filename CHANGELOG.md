@@ -20,11 +20,12 @@
 
 ### 修复
 - 修复 OVF 格式兼容性问题
-  - 移除不兼容的 `Connection` 元素
+  - 添加必需的 `Connection` 元素（某些平台要求必须存在）
   - 移除不兼容的 `ResourceSubType` 元素
   - 移除不兼容的 `AutomaticAllocation` 元素
   - 移除不兼容的 `Address` 元素
   - 使用标准 OVF 1.0 规范的 `AddressOnParent` 元素
+  - 网络适配器使用通用的 "VM Network" 连接名称
   - 提升与 ESXi 6.7、VirtualBox、深信服等平台的兼容性
 
 ### 优化
