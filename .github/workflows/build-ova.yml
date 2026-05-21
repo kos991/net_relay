@@ -72,12 +72,15 @@ jobs:
           mkdir -p ova-build/apks
           docker run --rm -v "$PWD/ova-build/apks:/out" alpine:3.23 sh -c '
             set -e
-            printf "%s\n%s\n" \
-              "https://dl-cdn.alpinelinux.org/alpine/v3.23/main" \
-              "https://dl-cdn.alpinelinux.org/alpine/v3.23/community" > /etc/apk/repositories
+            # 启用 community 仓库
+            sed -i "/community/s/^#//" /etc/apk/repositories
             apk update
             echo "Fetching packages..."
-            apk fetch --recursive --output /out bash curl git docker docker-openrc docker-cli-compose ca-certificates openssl openssh open-vm-tools qemu-guest-agent || {
+            apk fetch --recursive --output /out \
+              bash curl git docker docker-openrc docker-cli-compose \
+              ca-certificates openssl openssh \
+              open-vm-tools open-vm-tools-guestinfo open-vm-tools-deploypkg \
+              qemu-guest-agent || {
               echo "Failed to fetch some packages, checking availability..."
               apk search open-vm-tools
               apk search qemu-guest-agent
@@ -110,11 +113,12 @@ jobs:
           set +e
           sudo -E virt-customize --no-network --format qcow2 -a ova-build/alpine.qcow2 \
             --root-password "password:${ROOT_PASSWORD}" \
+            --run-command "sed -i '/community/s/^#//' /etc/apk/repositories" \
             --copy-in ova-build/apks:/tmp \
             --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
             --run-command "rc-update add docker default" \
-            --run-command "if [ -f /etc/init.d/open-vm-tools ]; then rc-update add open-vm-tools default; fi" \
-            --run-command "if [ -f /etc/init.d/qemu-guest-agent ]; then rc-update add qemu-guest-agent default; fi" \
+            --run-command "if command -v vmtoolsd >/dev/null 2>&1; then rc-service open-vm-tools start && rc-update add open-vm-tools boot; fi" \
+            --run-command "if command -v qemu-ga >/dev/null 2>&1; then rc-update add qemu-guest-agent default && rc-service qemu-guest-agent start; fi" \
             --run-command "sed -i 's/^#\\?Port .*/Port ${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config" \
