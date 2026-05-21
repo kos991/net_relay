@@ -17,13 +17,14 @@ jobs:
 
       - name: Check shell syntax
         run: |
+          bash -n i.sh
           bash -n install.sh
           bash -n setup-relay.sh
           bash -n sync/sync-relay-certs.sh
           bash -n tests/test-generate.sh
 
       - name: Run shellcheck
-        run: shellcheck install.sh setup-relay.sh sync/sync-relay-certs.sh tests/test-generate.sh
+        run: shellcheck i.sh install.sh setup-relay.sh sync/sync-relay-certs.sh tests/test-generate.sh
 
       - name: Test generated files
         run: bash tests/test-generate.sh

@@ -34,6 +34,12 @@ Or run the one-line installer:
 curl -fsSL https://raw.githubusercontent.com/kos991/net_relay/main/install.sh | bash
 ```
 
+Shorter CDN entry:
+
+```bash
+curl -fsSL https://cdn.jsdelivr.net/gh/kos991/net_relay@main/i.sh | bash
+```
+
 Custom install directory:
 
 ```bash
