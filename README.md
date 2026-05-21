@@ -43,10 +43,10 @@ curl -fsSL https://cdn.jsdelivr.net/gh/kos991/net_relay@main/i.sh | bash
 Own-domain style:
 
 ```bash
-bash <(curl -sSL https://your-domain.example/main.sh)
+bash <(curl -sSL https://rels.jinfei.org/main.sh)
 ```
 
-Point `https://your-domain.example/main.sh` to the raw `main.sh` content from this repository.
+Point `https://rels.jinfei.org/main.sh` to the raw `main.sh` content from this repository.
 
 Custom install directory:
 
