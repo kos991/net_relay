@@ -179,6 +179,7 @@ jobs:
                 </Item>
                 <Item>
                   <rasd:AddressOnParent>0</rasd:AddressOnParent>
+                  <rasd:Connection>VM Network</rasd:Connection>
                   <rasd:Description>E1000 network adapter</rasd:Description>
                   <rasd:ElementName>Ethernet 1</rasd:ElementName>
                   <rasd:InstanceID>3</rasd:InstanceID>
