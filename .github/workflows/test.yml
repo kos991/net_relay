@@ -17,6 +17,7 @@ jobs:
 
       - name: Check shell syntax
         run: |
+          bash -n main.sh
           bash -n i.sh
           bash -n install.sh
           bash -n setup-relay.sh
@@ -24,7 +25,7 @@ jobs:
           bash -n tests/test-generate.sh
 
       - name: Run shellcheck
-        run: shellcheck i.sh install.sh setup-relay.sh sync/sync-relay-certs.sh tests/test-generate.sh
+        run: shellcheck main.sh i.sh install.sh setup-relay.sh sync/sync-relay-certs.sh tests/test-generate.sh
 
       - name: Test generated files
         run: bash tests/test-generate.sh
