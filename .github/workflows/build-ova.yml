@@ -117,8 +117,8 @@ jobs:
             --copy-in ova-build/apks:/tmp \
             --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
             --run-command "rc-update add docker default" \
-            --run-command "if command -v vmtoolsd >/dev/null 2>&1; then rc-service open-vm-tools start && rc-update add open-vm-tools boot; fi" \
-            --run-command "if command -v qemu-ga >/dev/null 2>&1; then rc-update add qemu-guest-agent default && rc-service qemu-guest-agent start; fi" \
+            --run-command "if command -v vmtoolsd >/dev/null 2>&1; then rc-update add open-vm-tools boot; fi" \
+            --run-command "if command -v qemu-ga >/dev/null 2>&1; then rc-update add qemu-guest-agent default; fi" \
             --run-command "sed -i 's/^#\\?Port .*/Port ${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config" \
