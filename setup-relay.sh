@@ -7,11 +7,12 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
+COMPOSE_CMD=()
 
 print_header() {
   echo -e "${GREEN}=================================================${NC}"
   echo -e "${GREEN}          NetBird Relay 一键安装脚本             ${NC}"
-  echo -e "${GREEN}        Cloudflare DNS + 自定义 Relay 端口        ${NC}"
+  echo -e "${GREEN}        Cloudflare DNS + 自定义 Relay 端口       ${NC}"
   echo -e "${GREEN}=================================================${NC}"
 }
 
@@ -41,12 +42,40 @@ trim() {
   printf '%s' "$value"
 }
 
+read_input() {
+  local prompt="$1"
+  local value=""
+
+  printf '%s' "$prompt" >&2
+  if [[ -r /dev/tty ]]; then
+    IFS= read -r value </dev/tty || fail "无法从终端读取输入。"
+  else
+    IFS= read -r value || fail "无法读取输入，请在交互式终端中执行。"
+  fi
+
+  trim "$value"
+}
+
+read_secret() {
+  local prompt="$1"
+  local value=""
+
+  printf '%s' "$prompt" >&2
+  if [[ -r /dev/tty ]]; then
+    IFS= read -r -s value </dev/tty || fail "无法从终端读取输入。"
+  else
+    IFS= read -r -s value || fail "无法读取输入，请在交互式终端中执行。"
+  fi
+  printf '\n' >&2
+
+  trim "$value"
+}
+
 prompt_nonempty() {
   local prompt="$1"
   local value=""
   while [[ -z "$value" ]]; do
-    read -r -p "$prompt" value
-    value="$(trim "$value")"
+    value="$(read_input "$prompt")"
   done
   printf '%s' "$value"
 }
@@ -55,8 +84,7 @@ prompt_default() {
   local prompt="$1"
   local default="$2"
   local value=""
-  read -r -p "$prompt" value
-  value="$(trim "$value")"
+  value="$(read_input "$prompt")"
   if [[ -z "$value" ]]; then
     value="$default"
   fi
@@ -64,12 +92,7 @@ prompt_default() {
 }
 
 prompt_secret() {
-  local prompt="$1"
-  local value=""
-  read -r -s -p "$prompt" value
-  printf '\n' >&2
-  value="$(trim "$value")"
-  printf '%s' "$value"
+  read_secret "$1"
 }
 
 validate_port() {
@@ -82,10 +105,7 @@ generate_secret() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -base64 32 | tr -d '\n'
   elif command -v python3 >/dev/null 2>&1; then
-    python3 - <<'PY'
-import secrets
-print(secrets.token_urlsafe(32))
-PY
+    python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
   else
     fail "未检测到 openssl 或 python3，无法自动生成共享密钥。"
   fi
@@ -110,12 +130,23 @@ ensure_docker() {
     curl -fsSL https://get.docker.com | bash
   fi
 
+  if ! docker info >/dev/null 2>&1; then
+    warn "Docker 服务未运行，正在尝试启动。"
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl start docker || true
+    elif command -v service >/dev/null 2>&1; then
+      service docker start || true
+    fi
+  fi
+
+  docker info >/dev/null 2>&1 || fail "Docker 服务不可用，请先启动 Docker 后重试。"
+
   if docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker compose)
   elif command -v docker-compose >/dev/null 2>&1; then
     COMPOSE_CMD=(docker-compose)
   else
-    fail "未检测到 docker compose。"
+    fail "未检测到 Docker Compose。"
   fi
 }
 
@@ -280,7 +311,6 @@ STUN 地址:  stun:${RELAY_DOMAIN}:${STUN_PORT}
 共享密钥: ${RELAY_AUTH_SECRET}
 
 请将下面配置写入 NetBird Management 的 config.yaml：
-
 server:
   relays:
     addresses:
@@ -315,6 +345,7 @@ CADDY_HTTPS_PORT=18443
 
 validate_port "$RELAY_PORT" || fail "Relay 端口无效：${RELAY_PORT}"
 validate_port "$STUN_PORT" || fail "STUN 端口无效：${STUN_PORT}"
+validate_port "$SYNC_INTERVAL" || fail "证书同步间隔无效：${SYNC_INTERVAL}"
 
 if [[ -z "$RELAY_AUTH_SECRET" ]]; then
   RELAY_AUTH_SECRET="$(generate_secret)"

@@ -15,13 +15,13 @@ echo "================================================="
 echo "          NetBird Relay OVA 首次启动向导"
 echo "================================================="
 echo
-echo "本镜像已内置 Docker 镜像，首次启动只需要填写参数。"
+echo "镜像已内置 Docker 镜像，首次启动只需要填写参数。"
 echo
 
 rc-service docker start >/dev/null 2>&1 || true
 
 if [[ ! -f "$IMAGE_FLAG" ]]; then
-  echo "正在加载内置 Docker 镜像，请稍候..."
+  echo "正在加载内置 Docker 镜像，请稍等..."
   docker load -i "$IMAGE_TAR"
   mkdir -p "$(dirname "$IMAGE_FLAG")"
   touch "$IMAGE_FLAG"
@@ -34,4 +34,3 @@ bash ./setup-relay.sh
 
 mkdir -p "$(dirname "$FLAG")"
 touch "$FLAG"
-

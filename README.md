@@ -6,23 +6,23 @@ bash <(curl -sSL https://rels.jinfei.org/main.sh)
 
 ## 准备
 
-- 域名托管在 Cloudflare
-- Cloudflare API Token 权限：`Zone.Zone:Read`、`Zone.DNS:Edit`
-- Relay 域名使用 DNS only，关闭橙云代理
-- 放行 Relay TCP 端口，例如 `8443/tcp`
-- 放行 STUN UDP 端口，例如 `3478/udp`
+- 域名托管在 Cloudflare。
+- Cloudflare API Token 需要 `Zone.Zone:Read` 和 `Zone.DNS:Edit` 权限。
+- Relay 域名建议使用 DNS only，不开启橙云代理。
+- 放行 Relay TCP 端口，例如 `8443/tcp`。
+- 放行 STUN UDP 端口，例如 `3478/udp`。
 
 ## 安装时填写
 
 ```text
-请输入 Relay 域名: Relay 域名
-请输入证书邮箱: 证书申请邮箱
-请输入 Cloudflare API Token: Cloudflare API Token
-请输入 Relay TCP 端口 [8443]: Relay 端口
-请输入 STUN UDP 端口 [3478]: STUN 端口
-请输入 Relay 镜像标签 [latest]: 默认 latest
-请输入证书同步间隔秒数 [60]: 默认 60
-请输入共享密钥，留空自动生成: 留空自动生成
+Relay 域名：例如 rels.jinfei.org
+证书邮箱：用于申请证书
+Cloudflare API Token：用于 DNS-01 证书签发
+Relay TCP 端口：默认 8443
+STUN UDP 端口：默认 3478
+Relay 镜像标签：默认 latest
+证书同步间隔：默认 60 秒
+共享密钥：可留空自动生成
 ```
 
 ## 主服务器配置
@@ -51,15 +51,6 @@ docker compose logs -f caddy sync-relay-certs relay
 docker compose restart relay
 ```
 
-## OVA 镜像
+## 镜像
 
-GitHub Releases 会提供 Alpine OVA 镜像。  
-每个 OVA Release 的说明里会写入随机 root 密码。
-
-支持常见虚拟化平台导入：
-
-- VMware ESXi / Workstation
-- VirtualBox
-- Proxmox VE，必要时解包 OVA 后导入 VMDK
-
-OVA 只是预装 Docker、Relay 相关镜像和首次启动向导；上面的一键脚本入口仍然保留。
+GitHub Releases 会提供 OVA、QCOW2、VHD 镜像。每次 Release 说明都会写入随机 root 密码、SSH 端口和本次更新内容。
