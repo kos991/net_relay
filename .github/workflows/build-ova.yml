@@ -78,10 +78,11 @@ jobs:
 
       - name: Customize Alpine image
         env:
+          LIBGUESTFS_BACKEND: direct
           ROOT_PASSWORD: ${{ steps.meta.outputs.root_password }}
           SSH_PORT: ${{ steps.meta.outputs.ssh_port }}
         run: |
-          sudo virt-customize -a ova-build/alpine.qcow2 \
+          sudo -E virt-customize --format qcow2 -a ova-build/alpine.qcow2 \
             --root-password "password:${ROOT_PASSWORD}" \
             --run-command "printf '%s\n%s\n' 'https://dl-cdn.alpinelinux.org/alpine/v3.23/main' 'https://dl-cdn.alpinelinux.org/alpine/v3.23/community' > /etc/apk/repositories" \
             --run-command "apk update" \
