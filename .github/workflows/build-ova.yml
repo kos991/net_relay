@@ -77,7 +77,8 @@ jobs:
             apk update
             echo "Fetching packages..."
             apk fetch --recursive --output /out \
-              bash curl git docker docker-openrc docker-cli-compose \
+              bash curl git docker docker-openrc docker-cli docker-compose \
+              parted e2fsprogs cloud-utils-growpart \
               ca-certificates openssl openssh \
               open-vm-tools open-vm-tools-guestinfo open-vm-tools-deploypkg \
               qemu-guest-agent || {
@@ -99,10 +100,19 @@ jobs:
         run: |
           curl -fsSL "$ALPINE_IMAGE_URL" -o ova-build/alpine.qcow2
           qemu-img resize ova-build/alpine.qcow2 8G
-          sudo guestfish --rw -a ova-build/alpine.qcow2 <<'EOF'
-          run
-          resize2fs /dev/sda
-          EOF
+
+      - name: Create root resize script
+        run: |
+          cat > ova-build/resize-root.sh <<'SCRIPT'
+          #!/bin/sh
+          root_dev=$(awk '$2=="/" {print $1}' /proc/mounts)
+          if [ -n "$root_dev" ]; then
+            disk=$(echo "$root_dev" | sed 's/[0-9]*$//')
+            num=$(echo "$root_dev" | grep -o "[0-9]*$")
+            parted --script "$disk" resizepart "$num" 100% 2>/dev/null || true
+            resize2fs "$root_dev" 2>/dev/null || true
+          fi
+          SCRIPT
 
       - name: Customize Alpine image
         env:
@@ -115,7 +125,9 @@ jobs:
             --root-password "password:${ROOT_PASSWORD}" \
             --run-command "sed -i '/community/s/^#//' /etc/apk/repositories" \
             --copy-in ova-build/apks:/tmp \
+            --copy-in ova-build/resize-root.sh:/tmp \
             --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
+            --run-command "sh /tmp/resize-root.sh" \
             --run-command "rc-update add docker default" \
             --run-command "if command -v vmtoolsd >/dev/null 2>&1; then rc-update add open-vm-tools boot; fi" \
             --run-command "if command -v qemu-ga >/dev/null 2>&1; then rc-update add qemu-guest-agent default; fi" \
@@ -192,19 +204,32 @@ jobs:
                   <rasd:VirtualQuantity>1024</rasd:VirtualQuantity>
                 </Item>
                 <Item>
+                  <rasd:Description>SCSI Controller</rasd:Description>
+                  <rasd:ElementName>SCSI Controller 0</rasd:ElementName>
                   <rasd:InstanceID>3</rasd:InstanceID>
-                  <rasd:ElementName>Network Adapter 1</rasd:ElementName>
-                  <rasd:ResourceType>10</rasd:ResourceType>
-                  <rasd:AddressOnParent>1</rasd:AddressOnParent>
+                  <rasd:ResourceSubType>lsilogic</rasd:ResourceSubType>
+                  <rasd:ResourceType>6</rasd:ResourceType>
+                </Item>
+                <Item>
+                  <rasd:Address>00:50:56:00:00:01</rasd:Address>
+                  <rasd:AddressOnParent>0</rasd:AddressOnParent>
+                  <rasd:AutomaticAllocation>true</rasd:AutomaticAllocation>
                   <rasd:Connection>VM Network</rasd:Connection>
+                  <rasd:Description>Network Adapter</rasd:Description>
+                  <rasd:ElementName>Network Adapter 1</rasd:ElementName>
+                  <rasd:InstanceID>4</rasd:InstanceID>
+                  <rasd:ResourceSubType>E1000</rasd:ResourceSubType>
+                  <rasd:ResourceType>10</rasd:ResourceType>
                 </Item>
                 <Item>
                   <rasd:Description>Disk</rasd:Description>
-                  <rasd:ElementName>Disk</rasd:ElementName>
+                  <rasd:ElementName>Disk 1</rasd:ElementName>
                   <rasd:HostResource>ovf:/disk/disk1</rasd:HostResource>
-                  <rasd:InstanceID>4</rasd:InstanceID>
+                  <rasd:InstanceID>5</rasd:InstanceID>
+                  <rasd:Parent>3</rasd:Parent>
                   <rasd:ResourceType>17</rasd:ResourceType>
                 </Item>
+                <vmw:Config ovf:required="false" vmw:key="automaticMACAddressAllocation" vmw:value="true"/>
               </VirtualHardwareSection>
             </VirtualSystem>
           </Envelope>
