@@ -85,8 +85,9 @@ jobs:
 
       - name: Download Alpine cloud image
         run: |
-          curl -fsSL "$ALPINE_IMAGE_URL" -o ova-build/alpine.qcow2
-          qemu-img resize ova-build/alpine.qcow2 8G
+          curl -fsSL "$ALPINE_IMAGE_URL" -o ova-build/alpine-base.qcow2
+          qemu-img create -f qcow2 ova-build/alpine.qcow2 8G
+          virt-resize --expand /dev/sda ova-build/alpine-base.qcow2 ova-build/alpine.qcow2
 
       - name: Customize Alpine image
         env:
