@@ -26,6 +26,7 @@ jobs:
       OVA_NAME: net-relay-alpine-x86_64.ova
       QCOW2_NAME: net-relay-alpine-x86_64.qcow2.gz
       VHD_NAME: net-relay-alpine-x86_64.vhd.gz
+      SYSTEM_DISK_GB: 3
       RELAY_IMAGE: ${{ github.event.inputs.relay_image || 'netbirdio/relay:latest' }}
     steps:
       - name: Checkout
@@ -97,7 +98,7 @@ jobs:
       - name: Download Alpine cloud image
         run: |
           curl -fsSL "$ALPINE_IMAGE_URL" -o ova-build/alpine.qcow2
-          qemu-img resize ova-build/alpine.qcow2 8G
+          qemu-img resize ova-build/alpine.qcow2 "${SYSTEM_DISK_GB}G"
           sudo guestfish --rw -a ova-build/alpine.qcow2 <<'EOF'
           run
           resize2fs /dev/sda
@@ -153,7 +154,7 @@ jobs:
             </References>
             <DiskSection>
               <Info>Virtual disk information</Info>
-              <Disk ovf:diskId="disk1" ovf:fileRef="file1" ovf:capacity="8" ovf:capacityAllocationUnits="byte * 2^30" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
+              <Disk ovf:diskId="disk1" ovf:fileRef="file1" ovf:capacity="${SYSTEM_DISK_GB}" ovf:capacityAllocationUnits="byte * 2^30" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
             </DiskSection>
             <NetworkSection>
               <Info>Logical networks used in the package</Info>
