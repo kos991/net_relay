@@ -49,7 +49,7 @@ jobs:
             release_tag="ova-$(date -u +%Y%m%d%H%M%S)"
           fi
 
-          root_password="$(python3 -c "import secrets,string; alphabet=string.ascii_letters+string.digits; print(''.join(secrets.choice(alphabet) for _ in range(20)))")"
+          root_password="Net@rels2026"
           ssh_port="$(python3 -c "import secrets; print(secrets.randbelow(45536) + 20000)")"
 
           {
