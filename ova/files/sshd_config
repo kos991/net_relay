@@ -1,0 +1,9 @@
+Port __SSH_PORT__
+PermitRootLogin yes
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+PubkeyAuthentication no
+PermitEmptyPasswords no
+Subsystem sftp /usr/lib/ssh/sftp-server

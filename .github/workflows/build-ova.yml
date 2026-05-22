@@ -131,8 +131,6 @@ jobs:
             --run-command "rc-update add docker default" \
             --run-command "if [ -f /etc/init.d/open-vm-tools ]; then rc-update add open-vm-tools default; fi" \
             --run-command "if [ -f /etc/init.d/qemu-guest-agent ]; then rc-update add qemu-guest-agent default; fi" \
-            --run-command "mkdir -p /etc/ssh/sshd_config.d" \
-            --run-command "grep -q '^Include /etc/ssh/sshd_config.d/\\*\\.conf$' /etc/ssh/sshd_config || printf '\nInclude /etc/ssh/sshd_config.d/*.conf\n' >> /etc/ssh/sshd_config" \
             --run-command "rc-update add sshd default" \
             --mkdir /opt/net-relay \
             --mkdir /usr/local/sbin \
@@ -141,10 +139,10 @@ jobs:
             --copy-in ova-build/netbird-relay-installer:/opt \
             --copy-in ova/files/net-relay-firstboot:/usr/local/sbin \
             --copy-in ova/files/net-relay-hw-check:/usr/local/sbin \
-            --copy-in ova/files/99-net-relay-sshd.conf:/etc/ssh/sshd_config.d \
+            --copy-in ova/files/sshd_config:/etc/ssh \
             --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in ova/files/root-profile:/root \
-            --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config.d/99-net-relay-sshd.conf" \
+            --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "chmod +x /usr/local/sbin/net-relay-firstboot /usr/local/sbin/net-relay-hw-check /opt/netbird-relay-installer/setup-relay.sh" \
             --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile" 2>&1 | tee ova-build/virt-customize.log
           status="${PIPESTATUS[0]}"
