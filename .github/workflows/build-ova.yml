@@ -78,10 +78,8 @@ jobs:
             echo "Fetching packages..."
             apk fetch --recursive --output /out \
               bash curl git docker docker-openrc docker-cli-compose \
-              parted e2fsprogs cloud-utils-growpart \
               ca-certificates openssl openssh \
-              open-vm-tools open-vm-tools-openrc open-vm-tools-guestinfo open-vm-tools-deploypkg \
-              qemu-guest-agent qemu-guest-agent-openrc || {
+              open-vm-tools qemu-guest-agent || {
               echo "Failed to fetch some packages, checking availability..."
               apk search open-vm-tools
               apk search qemu-guest-agent
@@ -100,19 +98,10 @@ jobs:
         run: |
           curl -fsSL "$ALPINE_IMAGE_URL" -o ova-build/alpine.qcow2
           qemu-img resize ova-build/alpine.qcow2 8G
-
-      - name: Create root resize script
-        run: |
-          cat > ova-build/resize-root.sh <<'SCRIPT'
-          #!/bin/sh
-          root_dev=$(awk '$2=="/" {print $1}' /proc/mounts)
-          if [ -n "$root_dev" ]; then
-            disk=$(echo "$root_dev" | sed 's/[0-9]*$//')
-            num=$(echo "$root_dev" | grep -o "[0-9]*$")
-            parted --script "$disk" resizepart "$num" 100% 2>/dev/null || true
-            resize2fs "$root_dev" 2>/dev/null || true
-          fi
-          SCRIPT
+          sudo guestfish --rw -a ova-build/alpine.qcow2 <<'EOF'
+          run
+          resize2fs /dev/sda
+          EOF
 
       - name: Customize Alpine image
         env:
@@ -125,12 +114,10 @@ jobs:
             --root-password "password:${ROOT_PASSWORD}" \
             --run-command "sed -i '/community/s/^#//' /etc/apk/repositories" \
             --copy-in ova-build/apks:/tmp \
-            --copy-in ova-build/resize-root.sh:/tmp \
             --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
-            --run-command "sh /tmp/resize-root.sh" \
             --run-command "rc-update add docker default" \
-            --run-command "rc-update add open-vm-tools default || true" \
-            --run-command "rc-update add qemu-guest-agent default || true" \
+            --run-command "if [ -f /etc/init.d/open-vm-tools ]; then rc-update add open-vm-tools default; fi" \
+            --run-command "if [ -f /etc/init.d/qemu-guest-agent ]; then rc-update add qemu-guest-agent default; fi" \
             --run-command "sed -i 's/^#\\?Port .*/Port ${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/^#\\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config" \
