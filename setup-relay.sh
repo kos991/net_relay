@@ -11,8 +11,8 @@ COMPOSE_CMD=()
 
 print_header() {
   echo -e "${GREEN}=================================================${NC}"
-  echo -e "${GREEN}          NetBird Relay 一键安装脚本             ${NC}"
-  echo -e "${GREEN}        Cloudflare DNS + 自定义 Relay 端口       ${NC}"
+  echo -e "${GREEN}              NetBird Relay Installer            ${NC}"
+  echo -e "${GREEN}          Cloudflare DNS + Relay + STUN          ${NC}"
   echo -e "${GREEN}=================================================${NC}"
 }
 
@@ -31,7 +31,7 @@ fail() {
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
-    fail "缺少必要命令：$1"
+    fail "Missing required command: $1"
   fi
 }
 
@@ -48,9 +48,9 @@ read_input() {
 
   printf '%s' "$prompt" >&2
   if [[ -r /dev/tty ]]; then
-    IFS= read -r value </dev/tty || fail "无法从终端读取输入。"
+    IFS= read -r value </dev/tty || fail "Unable to read from terminal."
   else
-    IFS= read -r value || fail "无法读取输入，请在交互式终端中执行。"
+    IFS= read -r value || fail "Unable to read input. Please run in an interactive terminal."
   fi
 
   trim "$value"
@@ -62,9 +62,9 @@ read_secret() {
 
   printf '%s' "$prompt" >&2
   if [[ -r /dev/tty ]]; then
-    IFS= read -r -s value </dev/tty || fail "无法从终端读取输入。"
+    IFS= read -r -s value </dev/tty || fail "Unable to read from terminal."
   else
-    IFS= read -r -s value || fail "无法读取输入，请在交互式终端中执行。"
+    IFS= read -r -s value || fail "Unable to read input. Please run in an interactive terminal."
   fi
   printf '\n' >&2
 
@@ -91,10 +91,6 @@ prompt_default() {
   printf '%s' "$value"
 }
 
-prompt_secret() {
-  read_secret "$1"
-}
-
 validate_port() {
   local port="$1"
   [[ "$port" =~ ^[0-9]+$ ]] || return 1
@@ -107,7 +103,7 @@ generate_secret() {
   elif command -v python3 >/dev/null 2>&1; then
     python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
   else
-    fail "未检测到 openssl 或 python3，无法自动生成共享密钥。"
+    fail "openssl or python3 is required to generate an auth secret."
   fi
 }
 
@@ -120,18 +116,18 @@ ensure_permissions() {
     return 0
   fi
 
-  fail "请使用 root 执行，或使用已经具备 Docker 权限的用户执行。"
+  fail "Run as root, or use a user that can access Docker."
 }
 
 ensure_docker() {
   if ! command -v docker >/dev/null 2>&1; then
-    warn "未检测到 Docker，正在通过 get.docker.com 安装。"
+    warn "Docker was not found. Installing Docker from get.docker.com."
     require_cmd curl
     curl -fsSL https://get.docker.com | bash
   fi
 
   if ! docker info >/dev/null 2>&1; then
-    warn "Docker 服务未运行，正在尝试启动。"
+    warn "Docker is not running. Trying to start it."
     if command -v systemctl >/dev/null 2>&1; then
       systemctl start docker || true
     elif command -v service >/dev/null 2>&1; then
@@ -139,14 +135,14 @@ ensure_docker() {
     fi
   fi
 
-  docker info >/dev/null 2>&1 || fail "Docker 服务不可用，请先启动 Docker 后重试。"
+  docker info >/dev/null 2>&1 || fail "Docker is unavailable. Start Docker and retry."
 
   if docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker compose)
   elif command -v docker-compose >/dev/null 2>&1; then
     COMPOSE_CMD=(docker-compose)
   else
-    fail "未检测到 Docker Compose。"
+    fail "Docker Compose was not found."
   fi
 }
 
@@ -274,7 +270,7 @@ EOF
 }
 
 start_bootstrap_stack() {
-  log "正在启动 Caddy 和证书同步服务。"
+  log "Starting Caddy and certificate sync services."
   "${COMPOSE_CMD[@]}" -f "${SCRIPT_DIR}/docker-compose.yml" up -d --build caddy sync-relay-certs
 }
 
@@ -284,33 +280,33 @@ wait_for_cert() {
   local waited=0
   local max_wait=600
 
-  log "正在等待证书签发并同步到 Relay。"
+  log "Waiting for certificate issuance and sync."
   while (( waited < max_wait )); do
     if [[ -s "$cert_path" && -s "$key_path" ]]; then
-      log "证书已就绪。"
+      log "Certificate is ready."
       return 0
     fi
     sleep 5
     waited=$((waited + 5))
   done
 
-  fail "等待证书超时，请查看日志：docker compose logs caddy sync-relay-certs"
+  fail "Timed out waiting for certificates. Check: ${COMPOSE_CMD[*]} logs caddy sync-relay-certs"
 }
 
 start_relay() {
-  log "正在启动 NetBird Relay。"
+  log "Starting NetBird Relay."
   "${COMPOSE_CMD[@]}" -f "${SCRIPT_DIR}/docker-compose.yml" up -d relay
 }
 
 print_summary() {
   cat <<EOF
 
-==================== 安装完成 ====================
-Relay 地址: rels://${RELAY_DOMAIN}:${RELAY_PORT}
-STUN 地址:  stun:${RELAY_DOMAIN}:${STUN_PORT}
-共享密钥: ${RELAY_AUTH_SECRET}
+==================== Install Complete ====================
+Relay address: rels://${RELAY_DOMAIN}:${RELAY_PORT}
+STUN address:  stun:${RELAY_DOMAIN}:${STUN_PORT}
+Auth secret:   ${RELAY_AUTH_SECRET}
 
-请将下面配置写入 NetBird Management 的 config.yaml：
+Add this to NetBird Management config.yaml:
 server:
   relays:
     addresses:
@@ -320,7 +316,7 @@ server:
     - uri: "stun:${RELAY_DOMAIN}:${STUN_PORT}"
       proto: udp
 
-常用命令：
+Useful commands:
   cd ${SCRIPT_DIR}
   ${COMPOSE_CMD[*]} logs -f caddy sync-relay-certs relay
   ${COMPOSE_CMD[*]} restart relay
@@ -331,25 +327,25 @@ print_header
 ensure_permissions
 ensure_docker
 
-RELAY_DOMAIN="$(prompt_nonempty '请输入 Relay 域名，例如 rels.jinfei.org: ')"
-ACME_EMAIL="$(prompt_nonempty '请输入证书邮箱: ')"
-CF_API_TOKEN="$(prompt_secret '请输入 Cloudflare API Token: ')"
-RELAY_PORT="$(prompt_default '请输入 Relay TCP 端口 [8443]: ' '8443')"
-STUN_PORT="$(prompt_default '请输入 STUN UDP 端口 [3478]: ' '3478')"
-RELAY_IMAGE_TAG="$(prompt_default '请输入 Relay 镜像标签 [latest]: ' 'latest')"
-SYNC_INTERVAL="$(prompt_default '请输入证书同步间隔秒数 [60]: ' '60')"
-RELAY_AUTH_SECRET="$(prompt_secret '请输入共享密钥，留空自动生成: ')"
+RELAY_DOMAIN="$(prompt_nonempty 'Relay domain, e.g. rels.jinfei.org: ')"
+ACME_EMAIL="$(prompt_nonempty 'ACME email: ')"
+CF_API_TOKEN="$(read_secret 'Cloudflare API Token: ')"
+RELAY_PORT="$(prompt_default 'Relay TCP port [8443]: ' '8443')"
+STUN_PORT="$(prompt_default 'STUN UDP port [3478]: ' '3478')"
+RELAY_IMAGE_TAG="$(prompt_default 'Relay image tag [latest]: ' 'latest')"
+SYNC_INTERVAL="$(prompt_default 'Certificate sync interval seconds [60]: ' '60')"
+RELAY_AUTH_SECRET="$(read_secret 'Auth secret, empty to auto-generate: ')"
 
 CADDY_HTTP_PORT=18080
 CADDY_HTTPS_PORT=18443
 
-validate_port "$RELAY_PORT" || fail "Relay 端口无效：${RELAY_PORT}"
-validate_port "$STUN_PORT" || fail "STUN 端口无效：${STUN_PORT}"
-validate_port "$SYNC_INTERVAL" || fail "证书同步间隔无效：${SYNC_INTERVAL}"
+validate_port "$RELAY_PORT" || fail "Invalid Relay port: ${RELAY_PORT}"
+validate_port "$STUN_PORT" || fail "Invalid STUN port: ${STUN_PORT}"
+validate_port "$SYNC_INTERVAL" || fail "Invalid sync interval: ${SYNC_INTERVAL}"
 
 if [[ -z "$RELAY_AUTH_SECRET" ]]; then
   RELAY_AUTH_SECRET="$(generate_secret)"
-  log "已自动生成共享密钥。"
+  log "Generated auth secret automatically."
 fi
 
 ensure_directories

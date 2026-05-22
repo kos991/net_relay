@@ -11,17 +11,23 @@ if [[ -f "$FLAG" ]]; then
 fi
 
 clear || true
-echo "================================================="
-echo "          NetBird Relay OVA 首次启动向导"
-echo "================================================="
-echo
-echo "镜像已内置 Docker 镜像，首次启动只需要填写参数。"
-echo
+cat <<'EOF'
+=================================================
+              NetBird Relay OVA
+=================================================
+
+Tip:
+- The VMware console may not display Chinese fonts.
+- For a better setup experience, SSH into this VM.
+- The installer will ask for Cloudflare DNS and Relay settings.
+
+=================================================
+EOF
 
 rc-service docker start >/dev/null 2>&1 || true
 
 if [[ ! -f "$IMAGE_FLAG" ]]; then
-  echo "正在加载内置 Docker 镜像，请稍等..."
+  echo "Loading bundled Docker images, please wait..."
   docker load -i "$IMAGE_TAR"
   mkdir -p "$(dirname "$IMAGE_FLAG")"
   touch "$IMAGE_FLAG"
