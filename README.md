@@ -23,6 +23,7 @@ STUN UDP 端口：默认 3478
 Relay 镜像标签：默认 latest
 证书同步间隔：默认 60 秒
 共享密钥：可留空自动生成
+Docker registry mirror：可选，国内拉取失败时填写
 ```
 
 ## 主服务器配置
@@ -54,3 +55,4 @@ docker compose restart relay
 ## 镜像
 
 GitHub Releases 会提供 OVA、QCOW2、VHD 镜像。每次 Release 说明都会写入随机 root 密码、SSH 端口和本次更新内容。
+如果 Docker Hub 拉取慢或失败，可以在安装时填写 Docker registry mirror。

@@ -146,6 +146,55 @@ ensure_docker() {
   fi
 }
 
+configure_docker_registry_mirror() {
+  local mirror_url="$1"
+  [[ -z "$mirror_url" ]] && return 0
+
+  mkdir -p /etc/docker
+
+  if [[ -f /etc/docker/daemon.json ]]; then
+    cp /etc/docker/daemon.json "/etc/docker/daemon.json.bak.$(date +%s)"
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$mirror_url" <<'PY'
+import json
+import os
+import sys
+
+mirror = sys.argv[1]
+path = "/etc/docker/daemon.json"
+data = {}
+if os.path.exists(path):
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception:
+        data = {}
+data["registry-mirrors"] = [mirror]
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(data, fh, indent=2)
+    fh.write("\n")
+PY
+  else
+    cat > /etc/docker/daemon.json <<EOF
+{
+  "registry-mirrors": ["${mirror_url}"]
+}
+EOF
+  fi
+
+  warn "Docker registry mirror configured: ${mirror_url}"
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl restart docker || service docker restart || true
+  elif command -v service >/dev/null 2>&1; then
+    service docker restart || true
+  fi
+
+  docker info >/dev/null 2>&1 || fail "Docker failed to restart after configuring the mirror."
+}
+
 ensure_directories() {
   mkdir -p \
     "${SCRIPT_DIR}/caddy" \
@@ -335,6 +384,7 @@ STUN_PORT="$(prompt_default 'STUN UDP port [3478]: ' '3478')"
 RELAY_IMAGE_TAG="$(prompt_default 'Relay image tag [latest]: ' 'latest')"
 SYNC_INTERVAL="$(prompt_default 'Certificate sync interval seconds [60]: ' '60')"
 RELAY_AUTH_SECRET="$(read_secret 'Auth secret, empty to auto-generate: ')"
+DOCKER_REGISTRY_MIRROR="$(prompt_default 'Docker registry mirror URL [optional, blank to skip]: ' '')"
 
 CADDY_HTTP_PORT=18080
 CADDY_HTTPS_PORT=18443
@@ -349,6 +399,7 @@ if [[ -z "$RELAY_AUTH_SECRET" ]]; then
 fi
 
 ensure_directories
+configure_docker_registry_mirror "$DOCKER_REGISTRY_MIRROR"
 write_env_files
 write_compose_file
 write_caddyfile
