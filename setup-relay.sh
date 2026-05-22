@@ -146,6 +146,19 @@ ensure_docker() {
   fi
 }
 
+detect_docker_registry_mirror() {
+  if [[ -f /etc/docker/daemon.json ]] && grep -q '"registry-mirrors"' /etc/docker/daemon.json; then
+    warn "Existing Docker registry mirror config found; keeping it."
+    return 0
+  fi
+
+  if curl -sS --max-time 5 -o /dev/null https://registry-1.docker.io/v2/; then
+    return 0
+  fi
+
+  echo "https://docker.1ms.run"
+}
+
 configure_docker_registry_mirror() {
   local mirror_url="$1"
   [[ -z "$mirror_url" ]] && return 0
@@ -384,7 +397,7 @@ STUN_PORT="$(prompt_default 'STUN UDP port [3478]: ' '3478')"
 RELAY_IMAGE_TAG="$(prompt_default 'Relay image tag [latest]: ' 'latest')"
 SYNC_INTERVAL="$(prompt_default 'Certificate sync interval seconds [60]: ' '60')"
 RELAY_AUTH_SECRET="$(read_secret 'Auth secret, empty to auto-generate: ')"
-DOCKER_REGISTRY_MIRROR="$(prompt_default 'Docker registry mirror / proxy URL [optional, e.g. https://docker.1ms.run]: ' '')"
+DOCKER_REGISTRY_MIRROR="$(detect_docker_registry_mirror)"
 
 CADDY_HTTP_PORT=18080
 CADDY_HTTPS_PORT=18443

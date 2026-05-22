@@ -16,7 +16,7 @@ OVA 镜像由 GitHub Actions 构建并上传到 Releases。
 - **open-vm-tools** - VMware 虚拟机集成（时间同步、剪贴板、文件拖放）
 - **qemu-guest-agent** - KVM/Proxmox 虚拟机集成（快照、状态查询）
 - SSH 默认开启，端口随机生成并写入 Release 说明
-- 安装时可选填写 Docker registry mirror / proxy，例如 `https://docker.1ms.run`
+- 脚本会自动检测 Docker Hub，可用则直连，不可用则自动切到 `https://docker.1ms.run`
 - 首次登录 root 后自动进入中文配置向导
 
 ## 虚拟机集成功能
