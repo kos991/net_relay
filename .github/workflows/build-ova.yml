@@ -77,11 +77,11 @@ jobs:
             apk update
             echo "Fetching packages..."
             apk fetch --recursive --output /out \
-              bash curl git docker docker-openrc docker-cli docker-compose \
+              bash curl git docker docker-openrc docker-cli-compose \
               parted e2fsprogs cloud-utils-growpart \
               ca-certificates openssl openssh \
-              open-vm-tools open-vm-tools-guestinfo open-vm-tools-deploypkg \
-              qemu-guest-agent || {
+              open-vm-tools open-vm-tools-openrc open-vm-tools-guestinfo open-vm-tools-deploypkg \
+              qemu-guest-agent qemu-guest-agent-openrc || {
               echo "Failed to fetch some packages, checking availability..."
               apk search open-vm-tools
               apk search qemu-guest-agent
