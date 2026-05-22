@@ -384,7 +384,7 @@ STUN_PORT="$(prompt_default 'STUN UDP port [3478]: ' '3478')"
 RELAY_IMAGE_TAG="$(prompt_default 'Relay image tag [latest]: ' 'latest')"
 SYNC_INTERVAL="$(prompt_default 'Certificate sync interval seconds [60]: ' '60')"
 RELAY_AUTH_SECRET="$(read_secret 'Auth secret, empty to auto-generate: ')"
-DOCKER_REGISTRY_MIRROR="$(prompt_default 'Docker registry mirror URL [optional, blank to skip]: ' '')"
+DOCKER_REGISTRY_MIRROR="$(prompt_default 'Docker registry mirror / proxy URL [optional, e.g. https://docker.1ms.run]: ' '')"
 
 CADDY_HTTP_PORT=18080
 CADDY_HTTPS_PORT=18443
