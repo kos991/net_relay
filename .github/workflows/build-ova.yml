@@ -83,7 +83,7 @@ jobs:
               ca-certificates openssl openssh \
               cloud-init cloud-init-openrc cloud-init-datasource-aliyun \
               open-vm-tools qemu-guest-agent \
-              net-tools iproute2 iputils arping iputils-tracepath \
+              net-tools iproute2 iputils iputils-tracepath \
               traceroute mtr bind-tools busybox-extras nmap iperf3 \
               tcpdump lsof socat whois || {
               echo "Failed to fetch some packages, checking availability..."
