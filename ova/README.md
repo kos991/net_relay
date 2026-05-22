@@ -9,6 +9,10 @@ OVA 镜像由 GitHub Actions 构建并上传到 Releases。
 - 已内置 `netbirdio/relay:latest`
 - 已内置 `net-relay-caddy:ova`
 - 已内置 `net-relay-sync:ova`
+- cloud-init 与 AliYun datasource
+- 常用工具：wget、curl、git、vim、nano、unzip、zip、rsync
+- 网络排障工具：net-tools、iproute2、ping、arping、tracepath、traceroute、mtr、dig、telnet、nmap、iperf3、tcpdump、lsof、socat、whois
+- BBR TCP 拥塞控制配置
 - **open-vm-tools** - VMware 虚拟机集成（时间同步、剪贴板、文件拖放）
 - **qemu-guest-agent** - KVM/Proxmox 虚拟机集成（快照、状态查询）
 - SSH 默认开启，端口随机生成并写入 Release 说明
@@ -31,7 +35,7 @@ OVA 镜像由 GitHub Actions 构建并上传到 Releases。
 
 ## root 密码
 
-每次发布 OVA 时都会随机生成 root 密码和 SSH 端口，并写入对应 Release 说明。
+root 密码固定为 `Net@rels2026`，SSH 端口每次发布随机生成并写入对应 Release 说明。
 
 首次登录后建议立刻修改密码：
 
@@ -45,3 +49,13 @@ passwd
 - 虚拟硬件版本：vmx-14（兼容 ESXi 6.7+）
 - 网络适配器：E1000
 - 磁盘格式：streamOptimized VMDK
+
+## 镜像检测
+
+镜像内置检测命令：
+
+```bash
+net-relay-hw-check
+```
+
+该命令会检查 cloud-init、qemu-guest-agent、virtio/NVMe 模块、BBR 和常用网络工具状态。阿里云导入前仍建议使用阿里云镜像规范检测工具做最终检查。

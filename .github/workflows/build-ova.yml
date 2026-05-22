@@ -78,10 +78,16 @@ jobs:
             apk update
             echo "Fetching packages..."
             apk fetch --recursive --output /out \
-              bash curl git docker docker-openrc docker-cli-compose \
+              bash wget curl git vim nano unzip zip rsync \
+              docker docker-openrc docker-cli-compose \
               ca-certificates openssl openssh \
-              open-vm-tools qemu-guest-agent || {
+              cloud-init cloud-init-openrc cloud-init-datasource-aliyun \
+              open-vm-tools qemu-guest-agent \
+              net-tools iproute2 iputils arping iputils-tracepath \
+              traceroute mtr bind-tools busybox-extras nmap iperf3 \
+              tcpdump lsof socat whois || {
               echo "Failed to fetch some packages, checking availability..."
+              apk search cloud-init
               apk search open-vm-tools
               apk search qemu-guest-agent
               exit 1
@@ -116,6 +122,13 @@ jobs:
             --run-command "sed -i '/community/s/^#//' /etc/apk/repositories" \
             --copy-in ova-build/apks:/tmp \
             --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
+            --run-command "mkdir -p /etc/cloud/cloud.cfg.d && printf '%s\n' 'datasource_list: [ AliYun, Ec2, NoCloud, None ]' > /etc/cloud/cloud.cfg.d/99_net_relay_datasource.cfg" \
+            --run-command "if [ -f /etc/init.d/cloud-init-local ]; then rc-update add cloud-init-local boot; fi" \
+            --run-command "if [ -f /etc/init.d/cloud-init ]; then rc-update add cloud-init default; fi" \
+            --run-command "if [ -f /etc/init.d/cloud-config ]; then rc-update add cloud-config default; fi" \
+            --run-command "if [ -f /etc/init.d/cloud-final ]; then rc-update add cloud-final default; fi" \
+            --run-command "printf '%s\n' 'net.core.default_qdisc=fq' 'net.ipv4.tcp_congestion_control=bbr' > /etc/sysctl.d/99-net-relay-bbr.conf" \
+            --run-command "if [ -f /etc/init.d/sysctl ]; then rc-update add sysctl boot; fi" \
             --run-command "rc-update add docker default" \
             --run-command "if [ -f /etc/init.d/open-vm-tools ]; then rc-update add open-vm-tools default; fi" \
             --run-command "if [ -f /etc/init.d/qemu-guest-agent ]; then rc-update add qemu-guest-agent default; fi" \
@@ -128,8 +141,9 @@ jobs:
             --copy-in ova-build/docker-images.tar:/opt/net-relay \
             --copy-in ova-build/netbird-relay-installer:/opt \
             --copy-in ova/files/net-relay-firstboot:/usr/local/sbin \
+            --copy-in ova/files/net-relay-hw-check:/usr/local/sbin \
             --copy-in ova/files/root-profile:/root \
-            --run-command "chmod +x /usr/local/sbin/net-relay-firstboot /opt/netbird-relay-installer/setup-relay.sh" \
+            --run-command "chmod +x /usr/local/sbin/net-relay-firstboot /usr/local/sbin/net-relay-hw-check /opt/netbird-relay-installer/setup-relay.sh" \
             --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile" 2>&1 | tee ova-build/virt-customize.log
           status="${PIPESTATUS[0]}"
           if [ "$status" -ne 0 ]; then
@@ -242,6 +256,9 @@ jobs:
           - 支持自定义 Relay TCP 端口和 STUN UDP 端口
           - 自动启动 Caddy、证书同步服务和 NetBird Relay
           - 安装完成后输出 NetBird Management 配置片段
+          - 内置 cloud-init、qemu-guest-agent、open-vm-tools、BBR 和常用网络排障工具
+          - 可执行 \`net-relay-hw-check\` 检查 cloud-init、virtio/NVMe、BBR 和工具状态
+          - 阿里云导入前建议再使用官方镜像规范检测工具做最终检查
 
           登录信息：
           - 用户名：root
