@@ -236,6 +236,13 @@ jobs:
           cat > release/RELEASE_NOTES.md <<EOF
           # NetBird Relay Alpine 镜像
 
+          镜像说明：
+          - 中文交互安装流程
+          - 支持 Cloudflare DNS challenge 自动签发证书
+          - 支持自定义 Relay TCP 端口和 STUN UDP 端口
+          - 自动启动 Caddy、证书同步服务和 NetBird Relay
+          - 安装完成后输出 NetBird Management 配置片段
+
           登录信息：
           - 用户名：root
           - 密码：${{ steps.meta.outputs.root_password }}
@@ -250,7 +257,7 @@ jobs:
           本次更新：
           - ${{ steps.meta.outputs.update_note }}
 
-          一键脚本：
+          安装命令：
           \`bash <(curl -sSL https://rels.jinfei.org/main.sh)\`
           EOF
 
