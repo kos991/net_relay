@@ -149,10 +149,12 @@ ensure_docker() {
 detect_docker_registry_mirror() {
   if [[ -f /etc/docker/daemon.json ]] && grep -q '"registry-mirrors"' /etc/docker/daemon.json; then
     warn "Existing Docker registry mirror config found; keeping it."
+    echo "__KEEP__"
     return 0
   fi
 
   if curl -sS --max-time 5 -o /dev/null https://registry-1.docker.io/v2/; then
+    echo "__KEEP__"
     return 0
   fi
 
@@ -161,7 +163,7 @@ detect_docker_registry_mirror() {
 
 configure_docker_registry_mirror() {
   local mirror_url="$1"
-  [[ -z "$mirror_url" ]] && return 0
+  [[ -z "$mirror_url" || "$mirror_url" == "__KEEP__" ]] && return 0
 
   mkdir -p /etc/docker
 
@@ -205,7 +207,16 @@ EOF
     service docker restart || true
   fi
 
-  docker info >/dev/null 2>&1 || fail "Docker failed to restart after configuring the mirror."
+  local waited=0
+  while (( waited < 30 )); do
+    if docker info >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+
+  warn "Docker did not come back cleanly after configuring the mirror. Continuing anyway."
 }
 
 ensure_directories() {
