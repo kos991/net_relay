@@ -6,9 +6,10 @@ OVA 镜像由 GitHub Actions 构建并上传到 Releases。
 
 - Alpine Linux cloud image
 - Docker 与 Docker Compose
-- 已内置 `netbirdio/relay:latest`
+- 已内置构建时指定的 Relay 镜像，默认 `netbirdio/relay:latest`
 - 已内置 `net-relay-caddy:ova`
 - 已内置 `net-relay-sync:ova`
+- 首次启动会自动 `docker load` 导入内置镜像
 - cloud-init 与 AliYun datasource
 - 常用工具：wget、curl、git、vim、nano、unzip、zip、rsync
 - 网络排障工具：net-tools、iproute2、ping、arping、tracepath、traceroute、mtr、dig、telnet、nmap、iperf3、tcpdump、lsof、socat、whois
@@ -16,7 +17,6 @@ OVA 镜像由 GitHub Actions 构建并上传到 Releases。
 - **open-vm-tools** - VMware 虚拟机集成（时间同步、剪贴板、文件拖放）
 - **qemu-guest-agent** - KVM/Proxmox 虚拟机集成（快照、状态查询）
 - SSH 默认开启，端口随机生成并写入 Release 说明
-- 脚本会自动检测 Docker Hub，可用则直连，不可用则自动切到 `https://docker.1ms.run`
 - 首次登录 root 后自动进入中文配置向导
 
 ## 虚拟机集成功能

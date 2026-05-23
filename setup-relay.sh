@@ -42,6 +42,30 @@ trim() {
   printf '%s' "$value"
 }
 
+wait_for_docker() {
+  local attempts=60
+  while (( attempts > 0 )); do
+    if [[ -S /var/run/docker.sock ]] && docker info >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+    attempts=$((attempts - 1))
+  done
+  return 1
+}
+
+force_start_docker() {
+  if command -v rc-service >/dev/null 2>&1; then
+    rc-service docker stop >/dev/null 2>&1 || true
+    rm -f /run/docker.pid /var/run/docker.pid /run/docker.sock /var/run/docker.sock
+    rc-service docker start >/dev/null 2>&1 || true
+  elif command -v systemctl >/dev/null 2>&1; then
+    systemctl restart docker || systemctl start docker || true
+  elif command -v service >/dev/null 2>&1; then
+    service docker restart || service docker start || true
+  fi
+}
+
 read_input() {
   local prompt="$1"
   local value=""
@@ -107,6 +131,14 @@ generate_secret() {
   fi
 }
 
+normalize_relay_image() {
+  local image="$1"
+  if [[ "$image" != */* && "$image" != *:* ]]; then
+    image="netbirdio/relay:${image}"
+  fi
+  printf '%s' "$image"
+}
+
 ensure_permissions() {
   if [[ "${EUID}" -eq 0 ]]; then
     return 0
@@ -128,11 +160,8 @@ ensure_docker() {
 
   if ! docker info >/dev/null 2>&1; then
     warn "Docker is not running. Trying to start it."
-    if command -v systemctl >/dev/null 2>&1; then
-      systemctl start docker || true
-    elif command -v service >/dev/null 2>&1; then
-      service docker start || true
-    fi
+    force_start_docker
+    wait_for_docker || true
   fi
 
   docker info >/dev/null 2>&1 || fail "Docker is unavailable. Start Docker and retry."
@@ -144,79 +173,6 @@ ensure_docker() {
   else
     fail "Docker Compose was not found."
   fi
-}
-
-detect_docker_registry_mirror() {
-  if [[ -f /etc/docker/daemon.json ]] && grep -q '"registry-mirrors"' /etc/docker/daemon.json; then
-    warn "Existing Docker registry mirror config found; keeping it."
-    echo "__KEEP__"
-    return 0
-  fi
-
-  if curl -sS --max-time 5 -o /dev/null https://registry-1.docker.io/v2/; then
-    echo "__KEEP__"
-    return 0
-  fi
-
-  echo "https://docker.1ms.run"
-}
-
-configure_docker_registry_mirror() {
-  local mirror_url="$1"
-  [[ -z "$mirror_url" || "$mirror_url" == "__KEEP__" ]] && return 0
-
-  mkdir -p /etc/docker
-
-  if [[ -f /etc/docker/daemon.json ]]; then
-    cp /etc/docker/daemon.json "/etc/docker/daemon.json.bak.$(date +%s)"
-  fi
-
-  if command -v python3 >/dev/null 2>&1; then
-    python3 - "$mirror_url" <<'PY'
-import json
-import os
-import sys
-
-mirror = sys.argv[1]
-path = "/etc/docker/daemon.json"
-data = {}
-if os.path.exists(path):
-    try:
-        with open(path, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
-    except Exception:
-        data = {}
-data["registry-mirrors"] = [mirror]
-with open(path, "w", encoding="utf-8") as fh:
-    json.dump(data, fh, indent=2)
-    fh.write("\n")
-PY
-  else
-    cat > /etc/docker/daemon.json <<EOF
-{
-  "registry-mirrors": ["${mirror_url}"]
-}
-EOF
-  fi
-
-  warn "Docker registry mirror configured: ${mirror_url}"
-
-  if command -v systemctl >/dev/null 2>&1; then
-    systemctl restart docker || service docker restart || true
-  elif command -v service >/dev/null 2>&1; then
-    service docker restart || true
-  fi
-
-  local waited=0
-  while (( waited < 30 )); do
-    if docker info >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 2
-    waited=$((waited + 2))
-  done
-
-  warn "Docker did not come back cleanly after configuring the mirror. Continuing anyway."
 }
 
 ensure_directories() {
@@ -237,7 +193,7 @@ STUN_PORT=${STUN_PORT}
 ACME_EMAIL=${ACME_EMAIL}
 CF_API_TOKEN=${CF_API_TOKEN}
 RELAY_AUTH_SECRET=${RELAY_AUTH_SECRET}
-RELAY_IMAGE_TAG=${RELAY_IMAGE_TAG}
+RELAY_IMAGE=${RELAY_IMAGE}
 CADDY_HTTP_PORT=${CADDY_HTTP_PORT}
 CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT}
 SYNC_INTERVAL=${SYNC_INTERVAL}
@@ -306,7 +262,7 @@ EOF
       - caddy
 
   relay:
-    image: netbirdio/relay:\${RELAY_IMAGE_TAG}
+    image: \${RELAY_IMAGE}
     container_name: netbird-relay
     restart: unless-stopped
     env_file:
@@ -405,10 +361,11 @@ ACME_EMAIL="$(prompt_nonempty 'ACME email: ')"
 CF_API_TOKEN="$(read_secret 'Cloudflare API Token: ')"
 RELAY_PORT="$(prompt_default 'Relay TCP port [8443]: ' '8443')"
 STUN_PORT="$(prompt_default 'STUN UDP port [3478]: ' '3478')"
-RELAY_IMAGE_TAG="$(prompt_default 'Relay image tag [latest]: ' 'latest')"
+RELAY_IMAGE_DEFAULT="${RELAY_IMAGE:-netbirdio/relay:latest}"
+RELAY_IMAGE="$(prompt_default "Relay image [${RELAY_IMAGE_DEFAULT}]: " "${RELAY_IMAGE_DEFAULT}")"
+RELAY_IMAGE="$(normalize_relay_image "$RELAY_IMAGE")"
 SYNC_INTERVAL="$(prompt_default 'Certificate sync interval seconds [60]: ' '60')"
 RELAY_AUTH_SECRET="$(read_secret 'Auth secret, empty to auto-generate: ')"
-DOCKER_REGISTRY_MIRROR="$(detect_docker_registry_mirror)"
 
 CADDY_HTTP_PORT=18080
 CADDY_HTTPS_PORT=18443
@@ -423,7 +380,6 @@ if [[ -z "$RELAY_AUTH_SECRET" ]]; then
 fi
 
 ensure_directories
-configure_docker_registry_mirror "$DOCKER_REGISTRY_MIRROR"
 write_env_files
 write_compose_file
 write_caddyfile

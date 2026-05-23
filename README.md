@@ -20,10 +20,9 @@ Relay 域名：例如 rels.jinfei.org
 Cloudflare API Token：用于 DNS-01 证书签发
 Relay TCP 端口：默认 8443
 STUN UDP 端口：默认 3478
-Relay 镜像标签：默认 latest
+Relay 镜像：默认 netbirdio/relay:latest，也可只填 latest
 证书同步间隔：默认 60 秒
 共享密钥：可留空自动生成
-Docker registry mirror / proxy：脚本会自动检测，国内拉取失败时会自动切到 `https://docker.1ms.run`
 ```
 
 ## 主服务器配置
@@ -54,5 +53,4 @@ docker compose restart relay
 
 ## 镜像
 
-GitHub Releases 会提供 OVA、QCOW2、VHD 镜像。每次 Release 说明都会写入随机 root 密码、SSH 端口和本次更新内容。
-如果 Docker Hub 拉取慢或失败，脚本会自动切到 `https://docker.1ms.run`。
+GitHub Releases 会提供 OVA、QCOW2、VHD 镜像。镜像内置 Relay、Caddy、证书同步服务所需 Docker 镜像，首次启动会自动导入。每次 Release 说明都会写入 root 密码、SSH 端口、内置 Relay 镜像和本次更新内容。

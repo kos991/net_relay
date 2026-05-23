@@ -6,6 +6,24 @@ IMAGE_FLAG="/var/lib/net-relay/images.loaded"
 INSTALLER_DIR="/opt/netbird-relay-installer"
 IMAGE_TAR="/opt/net-relay/docker-images.tar"
 
+wait_for_docker() {
+  local attempts=60
+  while (( attempts > 0 )); do
+    if [[ -S /var/run/docker.sock ]] && docker info >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+    attempts=$((attempts - 1))
+  done
+  return 1
+}
+
+force_start_docker() {
+  rc-service docker stop >/dev/null 2>&1 || true
+  rm -f /run/docker.pid /var/run/docker.pid /run/docker.sock /var/run/docker.sock
+  rc-service docker start >/dev/null 2>&1 || true
+}
+
 if [[ -f "$FLAG" ]]; then
   exit 0
 fi
@@ -24,9 +42,17 @@ Tip:
 =================================================
 EOF
 
-rc-service docker start >/dev/null 2>&1 || true
+if ! wait_for_docker; then
+  force_start_docker
+  wait_for_docker || true
+fi
 
 if [[ ! -f "$IMAGE_FLAG" ]]; then
+  if [[ ! -s "$IMAGE_TAR" ]]; then
+    echo "Missing bundled Docker image archive: ${IMAGE_TAR}" >&2
+    exit 1
+  fi
+
   echo "Loading bundled Docker images, please wait..."
   docker load -i "$IMAGE_TAR"
   mkdir -p "$(dirname "$IMAGE_FLAG")"
@@ -34,8 +60,13 @@ if [[ ! -f "$IMAGE_FLAG" ]]; then
 fi
 
 cd "$INSTALLER_DIR"
+if [[ "${RELAY_IMAGE:-__RELAY_IMAGE__}" == "__RELAY_IMAGE__" ]]; then
+  RELAY_IMAGE="netbirdio/relay:latest"
+fi
+
 CADDY_IMAGE="net-relay-caddy:ova" \
 SYNC_IMAGE="net-relay-sync:ova" \
+RELAY_IMAGE="${RELAY_IMAGE}" \
 bash ./setup-relay.sh
 
 mkdir -p "$(dirname "$FLAG")"

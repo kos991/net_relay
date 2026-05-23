@@ -66,7 +66,7 @@ jobs:
           docker build -t net-relay-caddy:ova ./caddy
           docker build -t net-relay-sync:ova ./sync
           docker pull "${RELAY_IMAGE}"
-          docker save "${RELAY_IMAGE}" net-relay-caddy:ova net-relay-sync:ova -o ova-build/docker-images.tar
+          docker save -o ova-build/docker-images.tar "${RELAY_IMAGE}" net-relay-caddy:ova net-relay-sync:ova
 
       - name: Fetch Alpine packages for offline install
         run: |
@@ -123,6 +123,7 @@ jobs:
             --copy-in ova-build/apks:/tmp \
             --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
             --run-command "mkdir -p /etc/cloud/cloud.cfg.d && printf '%s\n' 'datasource_list: [ AliYun, Ec2, NoCloud, None ]' > /etc/cloud/cloud.cfg.d/99_net_relay_datasource.cfg" \
+            --copy-in ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --run-command "if [ -f /etc/init.d/cloud-init-local ]; then rc-update add cloud-init-local boot; fi" \
             --run-command "if [ -f /etc/init.d/cloud-init ]; then rc-update add cloud-init default; fi" \
             --run-command "if [ -f /etc/init.d/cloud-config ]; then rc-update add cloud-config default; fi" \
@@ -143,6 +144,11 @@ jobs:
             --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in ova/files/root-profile:/root \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
+            --run-command "sed -i 's#__RELAY_IMAGE__#${RELAY_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
+            --run-command "passwd -u root || true" \
+            --run-command "ssh-keygen -A" \
+            --run-command "sshd -t" \
+            --run-command "printf 'sshd effective config: '; grep -E '^(Port|PermitRootLogin|PasswordAuthentication|PubkeyAuthentication) ' /etc/ssh/sshd_config" \
             --run-command "chmod +x /usr/local/sbin/net-relay-firstboot /usr/local/sbin/net-relay-hw-check /opt/netbird-relay-installer/setup-relay.sh" \
             --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile" 2>&1 | tee ova-build/virt-customize.log
           status="${PIPESTATUS[0]}"
@@ -254,6 +260,8 @@ jobs:
           - 中文交互安装流程
           - 支持 Cloudflare DNS challenge 自动签发证书
           - 支持自定义 Relay TCP 端口和 STUN UDP 端口
+          - 内置 Docker 镜像：${RELAY_IMAGE}、net-relay-caddy:ova、net-relay-sync:ova
+          - 首次启动会自动导入内置镜像，默认不需要从 Docker Hub 拉取 Relay/Caddy/Sync 镜像
           - 自动启动 Caddy、证书同步服务和 NetBird Relay
           - 安装完成后输出 NetBird Management 配置片段
           - 内置 cloud-init、qemu-guest-agent、open-vm-tools、BBR 和常用网络排障工具
