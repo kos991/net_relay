@@ -2,7 +2,8 @@
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/kos991/net_relay.git}"
-ARCHIVE_URL="${ARCHIVE_URL:-https://github.com/kos991/net_relay/archive/refs/heads/main.tar.gz}"
+ARCHIVE_URL="${ARCHIVE_URL:-https://rels.jinfei.org/net_relay-main.tar.gz}"
+ARCHIVE_FALLBACK_URL="${ARCHIVE_FALLBACK_URL:-https://github.com/kos991/net_relay/archive/refs/heads/main.tar.gz}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/netbird-relay-installer}"
 BRANCH="${BRANCH:-main}"
 
@@ -27,14 +28,30 @@ fail() {
 download_file() {
   local url="$1"
   local output="$2"
+  local fallback_url="${3:-}"
 
   log "正在下载安装器：${url}"
   if command -v curl >/dev/null 2>&1; then
-    curl -fL --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 "$url" -o "$output"
+    if curl -fL --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 "$url" -o "$output"; then
+      return 0
+    fi
   elif command -v wget >/dev/null 2>&1; then
-    wget --timeout=10 --tries=3 -O "$output" "$url"
+    if wget --timeout=10 --tries=3 -O "$output" "$url"; then
+      return 0
+    fi
   else
     fail "需要安装 git、curl 或 wget 之一，用于下载安装器。"
+  fi
+
+  if [[ -n "$fallback_url" ]]; then
+    warn "主下载地址失败，尝试 GitHub 备用：${fallback_url}"
+    if command -v curl >/dev/null 2>&1; then
+      curl -fL --connect-timeout 10 --max-time 180 --retry 1 --retry-delay 2 "$fallback_url" -o "$output"
+    else
+      wget --timeout=10 --tries=2 -O "$output" "$fallback_url"
+    fi
+  else
+    return 1
   fi
 }
 
@@ -49,9 +66,9 @@ download_with_tarball() {
   tmp_dir="$(mktemp -d)"
 
   if command -v curl >/dev/null 2>&1; then
-    download_file "$ARCHIVE_URL" "$tmp_dir/repo.tar.gz"
+    download_file "$ARCHIVE_URL" "$tmp_dir/repo.tar.gz" "$ARCHIVE_FALLBACK_URL"
   elif command -v wget >/dev/null 2>&1; then
-    download_file "$ARCHIVE_URL" "$tmp_dir/repo.tar.gz"
+    download_file "$ARCHIVE_URL" "$tmp_dir/repo.tar.gz" "$ARCHIVE_FALLBACK_URL"
   else
     fail "需要安装 git、curl 或 wget 之一，用于下载安装器。"
   fi

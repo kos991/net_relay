@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_URL="${INSTALL_URL:-https://raw.githubusercontent.com/kos991/net_relay/main/install.sh}"
+INSTALL_URL="${INSTALL_URL:-https://rels.jinfei.org/install.sh}"
 
 tmp_file="$(mktemp)"
 cleanup() {
