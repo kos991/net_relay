@@ -9,21 +9,13 @@ OVA 镜像由 GitHub Actions 构建并上传到 Releases。镜像不再内置 Do
 - 默认从阿里云 ACR 公网拉取 Relay、Caddy 和证书同步服务镜像
 - cloud-init 与 AliYun datasource
 - 常用工具：wget、curl、git、vim、nano、unzip、zip、rsync
-- 网络排障工具：net-tools、iproute2、ping、arping、tracepath、traceroute、mtr、dig、telnet、nmap、iperf3、tcpdump、lsof、socat、whois
+- 基础网络工具：net-tools、iproute2、ping、arping、tracepath、dig、telnet、lsof
 - BBR TCP 拥塞控制配置
-- **open-vm-tools** - VMware 虚拟机集成（时间同步、剪贴板、文件拖放）
 - **qemu-guest-agent** - KVM/Proxmox 虚拟机集成（快照、状态查询）
 - SSH 默认开启，端口随机生成并写入 Release 说明
 - 首次登录 root 后自动进入中文配置向导
 
 ## 虚拟机集成功能
-
-### VMware 平台（open-vm-tools）
-- ✅ 自动时间同步
-- ✅ 剪贴板共享
-- ✅ 文件拖放
-- ✅ 自动调整分辨率
-- ✅ 虚拟机状态报告
 
 ### KVM/Proxmox 平台（qemu-guest-agent）
 - ✅ 虚拟机快照支持
@@ -56,4 +48,4 @@ passwd
 net-relay-hw-check
 ```
 
-该命令会检查 cloud-init、qemu-guest-agent、virtio/NVMe 模块、BBR 和常用网络工具状态。阿里云导入前仍建议使用阿里云镜像规范检测工具做最终检查。
+该命令会检查 cloud-init、qemu-guest-agent、virtio/NVMe 模块、BBR 和基础网络工具状态。阿里云导入前仍建议使用阿里云镜像规范检测工具做最终检查。

@@ -77,13 +77,11 @@ jobs:
               docker docker-openrc docker-cli-compose \
               ca-certificates openssl openssh \
               cloud-init cloud-init-openrc cloud-init-datasource-aliyun \
-              open-vm-tools qemu-guest-agent \
+              qemu-guest-agent \
               net-tools iproute2 iputils iputils-tracepath \
-              traceroute mtr bind-tools busybox-extras nmap iperf3 \
-              tcpdump lsof socat whois || {
+              bind-tools busybox-extras lsof || {
               echo "Failed to fetch some packages, checking availability..."
               apk search cloud-init
-              apk search open-vm-tools
               apk search qemu-guest-agent
               exit 1
             }
@@ -126,7 +124,6 @@ jobs:
             --run-command "if [ -f /etc/init.d/cloud-final ]; then rc-update add cloud-final default; fi" \
             --run-command "if [ -f /etc/init.d/sysctl ]; then rc-update add sysctl boot; fi" \
             --run-command "rc-update add docker default" \
-            --run-command "if [ -f /etc/init.d/open-vm-tools ]; then rc-update add open-vm-tools default; fi" \
             --run-command "if [ -f /etc/init.d/qemu-guest-agent ]; then rc-update add qemu-guest-agent default; fi" \
             --run-command "rc-update add sshd default" \
             --mkdir /usr/local/sbin \
@@ -259,7 +256,7 @@ jobs:
           - 默认从阿里云 ACR 公网拉取镜像：${RELAY_IMAGE}、${CADDY_IMAGE}、${SYNC_IMAGE}
           - 自动启动 Caddy、证书同步服务和 NetBird Relay
           - 安装完成后输出 NetBird Management 配置片段
-          - 内置 cloud-init、qemu-guest-agent、open-vm-tools、BBR 和常用网络排障工具
+          - 内置 cloud-init、qemu-guest-agent、BBR 和基础网络工具
           - 可执行 \`net-relay-hw-check\` 检查 cloud-init、virtio/NVMe、BBR 和工具状态
           - 阿里云导入前建议再使用官方镜像规范检测工具做最终检查
 
