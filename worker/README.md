@@ -4,7 +4,7 @@
 
 ## 路由
 
-- `/main.sh`：一键安装入口。
+- `/` 和 `/main.sh`：一键安装入口。
 - `/install.sh`：安装器入口。
 - `/net_relay-main.tar.gz`：代理当前 Release 的安装包。
 - `/SHA256SUMS`：代理当前 Release 的校验文件。
@@ -12,7 +12,7 @@
 ## 部署后检查
 
 ```bash
-curl -I https://rels.jinfei.org/main.sh
+curl -I https://rels.jinfei.org
 curl -I https://rels.jinfei.org/install.sh
 curl -I https://rels.jinfei.org/net_relay-main.tar.gz
 ```

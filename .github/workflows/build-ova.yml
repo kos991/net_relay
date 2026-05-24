@@ -274,7 +274,7 @@ jobs:
           运行说明：
           - OVA 首次登录会先自检 Docker、Docker Compose、磁盘空间和 ACR 镜像拉取。
           - 运行镜像默认从阿里云 ACR 公网拉取：\`${RELAY_IMAGE}\`、\`${CADDY_IMAGE}\`、\`${SYNC_IMAGE}\`。
-          - 一键脚本命令：\`bash <(curl -sSL https://rels.jinfei.org/main.sh)\`
+          - 一键脚本命令：\`bash <(curl -sSL https://rels.jinfei.org)\`
 
           本次更新：
           - ${{ steps.meta.outputs.update_note }}

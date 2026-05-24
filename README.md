@@ -3,7 +3,7 @@
 一键脚本会创建 NetBird Relay、Caddy 证书容器和证书同步容器，默认从阿里云 ACR 公网拉取镜像，不需要配置 Docker registry mirror。
 
 ```bash
-bash <(curl -sSL https://rels.jinfei.org/main.sh)
+bash <(curl -sSL https://rels.jinfei.org)
 ```
 
 ## 支持系统
