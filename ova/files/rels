@@ -92,14 +92,6 @@ restart_services() {
   "${COMPOSE_CMD[@]}" -f docker-compose.yml restart
 }
 
-run_hw_check() {
-  if command -v net-relay-hw-check >/dev/null 2>&1; then
-    net-relay-hw-check
-  else
-    fail "net-relay-hw-check not found."
-  fi
-}
-
 print_menu() {
   clear || true
   cat <<'EOF'
@@ -111,7 +103,6 @@ print_menu() {
 3) Show service status
 4) Follow service logs
 5) Restart services
-6) Run OVA hardware check
 0) Exit
 =================================================
 EOF
@@ -127,7 +118,6 @@ while true; do
     3) show_status ;;
     4) show_logs ;;
     5) restart_services ;;
-    6) run_hw_check ;;
     0) exit 0 ;;
     *) echo "Invalid choice: ${choice}" ;;
   esac
