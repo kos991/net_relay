@@ -24,6 +24,20 @@ fail() {
   exit 1
 }
 
+download_file() {
+  local url="$1"
+  local output="$2"
+
+  log "正在下载安装器：${url}"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 "$url" -o "$output"
+  elif command -v wget >/dev/null 2>&1; then
+    wget --timeout=10 --tries=3 -O "$output" "$url"
+  else
+    fail "需要安装 git、curl 或 wget 之一，用于下载安装器。"
+  fi
+}
+
 need_root_for_install_dir() {
   if [[ "${EUID}" -ne 0 && "$INSTALL_DIR" == /opt/* ]]; then
     fail "请使用 root 执行，或通过 INSTALL_DIR 指定当前用户可写目录。"
@@ -35,9 +49,9 @@ download_with_tarball() {
   tmp_dir="$(mktemp -d)"
 
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$ARCHIVE_URL" -o "$tmp_dir/repo.tar.gz"
+    download_file "$ARCHIVE_URL" "$tmp_dir/repo.tar.gz"
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$tmp_dir/repo.tar.gz" "$ARCHIVE_URL"
+    download_file "$ARCHIVE_URL" "$tmp_dir/repo.tar.gz"
   else
     fail "需要安装 git、curl 或 wget 之一，用于下载安装器。"
   fi
@@ -56,12 +70,12 @@ sync_repo() {
   if command -v git >/dev/null 2>&1; then
     if [[ -d "$INSTALL_DIR/.git" ]]; then
       log "正在更新安装器：${INSTALL_DIR}"
-      git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
+      git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH" || fail "更新安装器失败，请检查服务器到 GitHub 的网络。"
       git -C "$INSTALL_DIR" reset --hard "origin/${BRANCH}"
     else
       rm -rf "$INSTALL_DIR"
       log "正在下载安装到：${INSTALL_DIR}"
-      git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+      git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR" || fail "下载安装器失败，请检查服务器到 GitHub 的网络。"
     fi
   else
     warn "未检测到 git，改用压缩包下载安装器。"
