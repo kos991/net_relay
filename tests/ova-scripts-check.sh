@@ -4,9 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIRSTBOOT="${ROOT_DIR}/ova/files/net-relay-firstboot"
 RELS="${ROOT_DIR}/ova/files/rels"
+SETUP="${ROOT_DIR}/setup-relay.sh"
 
 bash -n "$FIRSTBOOT"
 bash -n "$RELS"
+bash -n "$SETUP"
 
 grep -q "NetBird Relay OVA 初始化引导" "$FIRSTBOOT"
 grep -q "正在执行 OVA 启动自检" "$FIRSTBOOT"
@@ -14,8 +16,13 @@ grep -q "自检完成" "$FIRSTBOOT"
 grep -q "NetBird Relay 管理菜单" "$RELS"
 grep -q "安装或重新配置 Relay" "$RELS"
 grep -q "更新镜像并重启服务" "$RELS"
+grep -q "NetBird Relay 安装向导" "$SETUP"
+grep -q "Relay 域名" "$SETUP"
+grep -q "认证密钥" "$SETUP"
+grep -q "安装完成" "$SETUP"
+grep -q "如果有多个 Relay 节点" "$SETUP"
 
-if grep -qi "VMware" "$FIRSTBOOT" "$RELS"; then
+if grep -qi "VMware" "$FIRSTBOOT" "$RELS" "$SETUP"; then
   echo "OVA scripts must not contain VMware-specific text." >&2
   exit 1
 fi
