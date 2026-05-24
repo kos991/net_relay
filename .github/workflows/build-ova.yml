@@ -117,6 +117,7 @@ jobs:
             --run-command "sed -i '/community/s/^#//' /etc/apk/repositories" \
             --copy-in ova-build/apks:/tmp \
             --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
+            --run-command "rm -rf /tmp/apks /var/cache/apk/*" \
             --run-command "mkdir -p /etc/cloud/cloud.cfg.d && printf '%s\n' 'datasource_list: [ AliYun, Ec2, NoCloud, None ]' > /etc/cloud/cloud.cfg.d/99_net_relay_datasource.cfg" \
             --copy-in ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --run-command "if [ -f /etc/init.d/cloud-init-local ]; then rc-update add cloud-init-local boot; fi" \
