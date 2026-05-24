@@ -27,7 +27,10 @@ jobs:
       QCOW2_NAME: net-relay-alpine-x86_64.qcow2.gz
       VHD_NAME: net-relay-alpine-x86_64.vhd.gz
       SYSTEM_DISK_GB: 3
-      RELAY_IMAGE: ${{ github.event.inputs.relay_image || 'netbirdio/relay:latest' }}
+      DEFAULT_IMAGE_REPOSITORY: crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels
+      RELAY_IMAGE: ${{ github.event.inputs.relay_image || 'crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay' }}
+      CADDY_IMAGE: crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:caddy
+      SYNC_IMAGE: crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:sync
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,14 +62,6 @@ jobs:
             echo "ssh_port=${ssh_port}"
             echo "update_note=$(git log -1 --pretty=%s)"
           } >> "$GITHUB_OUTPUT"
-
-      - name: Build local Docker image archive
-        run: |
-          mkdir -p ova-build
-          docker build -t net-relay-caddy:ova ./caddy
-          docker build -t net-relay-sync:ova ./sync
-          docker pull "${RELAY_IMAGE}"
-          docker save -o ova-build/docker-images.tar "${RELAY_IMAGE}" net-relay-caddy:ova net-relay-sync:ova
 
       - name: Fetch Alpine packages for offline install
         run: |
@@ -133,10 +128,8 @@ jobs:
             --run-command "if [ -f /etc/init.d/open-vm-tools ]; then rc-update add open-vm-tools default; fi" \
             --run-command "if [ -f /etc/init.d/qemu-guest-agent ]; then rc-update add qemu-guest-agent default; fi" \
             --run-command "rc-update add sshd default" \
-            --mkdir /opt/net-relay \
             --mkdir /usr/local/sbin \
             --mkdir /etc/sysctl.d \
-            --copy-in ova-build/docker-images.tar:/opt/net-relay \
             --copy-in ova-build/netbird-relay-installer:/opt \
             --copy-in ova/files/net-relay-firstboot:/usr/local/sbin \
             --copy-in ova/files/net-relay-hw-check:/usr/local/sbin \
@@ -145,6 +138,8 @@ jobs:
             --copy-in ova/files/root-profile:/root \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's#__RELAY_IMAGE__#${RELAY_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
+            --run-command "sed -i 's#__CADDY_IMAGE__#${CADDY_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
+            --run-command "sed -i 's#__SYNC_IMAGE__#${SYNC_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
             --run-command "passwd -u root || true" \
             --run-command "ssh-keygen -A" \
             --run-command "sshd -t" \
@@ -260,8 +255,7 @@ jobs:
           - 中文交互安装流程
           - 支持 Cloudflare DNS challenge 自动签发证书
           - 支持自定义 Relay TCP 端口和 STUN UDP 端口
-          - 内置 Docker 镜像：${RELAY_IMAGE}、net-relay-caddy:ova、net-relay-sync:ova
-          - 首次启动会自动导入内置镜像，默认不需要从 Docker Hub 拉取 Relay/Caddy/Sync 镜像
+          - 默认从阿里云 ACR 公网拉取镜像：${RELAY_IMAGE}、${CADDY_IMAGE}、${SYNC_IMAGE}
           - 自动启动 Caddy、证书同步服务和 NetBird Relay
           - 安装完成后输出 NetBird Management 配置片段
           - 内置 cloud-init、qemu-guest-agent、open-vm-tools、BBR 和常用网络排障工具

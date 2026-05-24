@@ -2,9 +2,7 @@
 set -euo pipefail
 
 FLAG="/var/lib/net-relay/firstboot.done"
-IMAGE_FLAG="/var/lib/net-relay/images.loaded"
 INSTALLER_DIR="/opt/netbird-relay-installer"
-IMAGE_TAR="/opt/net-relay/docker-images.tar"
 
 wait_for_docker() {
   local attempts=60
@@ -47,25 +45,19 @@ if ! wait_for_docker; then
   wait_for_docker || true
 fi
 
-if [[ ! -f "$IMAGE_FLAG" ]]; then
-  if [[ ! -s "$IMAGE_TAR" ]]; then
-    echo "Missing bundled Docker image archive: ${IMAGE_TAR}" >&2
-    exit 1
-  fi
-
-  echo "Loading bundled Docker images, please wait..."
-  docker load -i "$IMAGE_TAR"
-  mkdir -p "$(dirname "$IMAGE_FLAG")"
-  touch "$IMAGE_FLAG"
-fi
-
 cd "$INSTALLER_DIR"
 if [[ "${RELAY_IMAGE:-__RELAY_IMAGE__}" == "__RELAY_IMAGE__" ]]; then
-  RELAY_IMAGE="netbirdio/relay:latest"
+  RELAY_IMAGE="crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay"
+fi
+if [[ "${CADDY_IMAGE:-__CADDY_IMAGE__}" == "__CADDY_IMAGE__" ]]; then
+  CADDY_IMAGE="crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:caddy"
+fi
+if [[ "${SYNC_IMAGE:-__SYNC_IMAGE__}" == "__SYNC_IMAGE__" ]]; then
+  SYNC_IMAGE="crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:sync"
 fi
 
-CADDY_IMAGE="net-relay-caddy:ova" \
-SYNC_IMAGE="net-relay-sync:ova" \
+CADDY_IMAGE="${CADDY_IMAGE}" \
+SYNC_IMAGE="${SYNC_IMAGE}" \
 RELAY_IMAGE="${RELAY_IMAGE}" \
 bash ./setup-relay.sh
 

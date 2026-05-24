@@ -1,15 +1,12 @@
 # OVA 发布镜像
 
-OVA 镜像由 GitHub Actions 构建并上传到 Releases。
+OVA 镜像由 GitHub Actions 构建并上传到 Releases。镜像不再内置 Docker 业务镜像，以减小体积；首次配置时会从阿里云 ACR 公网拉取运行所需镜像。
 
 ## 构建内容
 
 - Alpine Linux cloud image
 - Docker 与 Docker Compose
-- 已内置构建时指定的 Relay 镜像，默认 `netbirdio/relay:latest`
-- 已内置 `net-relay-caddy:ova`
-- 已内置 `net-relay-sync:ova`
-- 首次启动会自动 `docker load` 导入内置镜像
+- 默认从阿里云 ACR 公网拉取 Relay、Caddy 和证书同步服务镜像
 - cloud-init 与 AliYun datasource
 - 常用工具：wget、curl、git、vim、nano、unzip、zip、rsync
 - 网络排障工具：net-tools、iproute2、ping、arping、tracepath、traceroute、mtr、dig、telnet、nmap、iperf3、tcpdump、lsof、socat、whois
