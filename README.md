@@ -14,7 +14,7 @@ bash <(curl -sSL https://rels.jinfei.org/main.sh)
 - Debian / Ubuntu：支持 `systemctl` 或 `service` 启停 Docker。
 - CentOS / Rocky Linux / AlmaLinux：支持 `systemctl` 或 `service` 启停 Docker。
 
-运行前需要 root，或当前用户已具备 Docker socket 访问权限。若系统没有 Docker，脚本会尝试通过 `get.docker.com` 安装 Docker；若 Docker Compose 不存在，会停止并提示。
+一键脚本不安装 Docker。运行前需要 root，或当前用户已具备 Docker socket 访问权限；Docker 和 Docker Compose 必须已安装并可用。若 Docker 或 Docker Compose 不存在，脚本会停止并提示。
 
 ## 安装前准备
 
@@ -47,10 +47,10 @@ crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:sync
 
 如需覆盖镜像，可在运行脚本前设置 `RELAY_IMAGE`、`CADDY_IMAGE`、`SYNC_IMAGE`。
 
-## 组件自愈能力
+## 运行边界
 
-- Docker 未启动时，脚本会尝试通过 `rc-service`、`systemctl` 或 `service` 重启/启动 Docker。
-- Docker socket 残留导致 Alpine OVA 内 Docker 启动异常时，OVA firstboot 会清理 stale pid/socket 后重启 Docker。
+- 一键脚本不安装 Docker，只在 Docker 未启动时尝试通过 `rc-service`、`systemctl` 或 `service` 启动 Docker。
+- OVA 内置 Docker、Docker Compose 和必要基础工具；Docker socket 残留导致 Alpine OVA 内 Docker 启动异常时，OVA firstboot 会清理 stale pid/socket 后重启 Docker。
 - Docker Compose 缺失、Docker 仍不可用、镜像无法拉取、磁盘空间不足时会停止安装并给出错误原因。
 - `docker-compose.yml` 内的 `caddy`、`sync-relay-certs`、`relay` 都配置 `restart: unless-stopped`，容器异常退出后由 Docker 自动拉起。
 - 证书同步容器会按 `SYNC_INTERVAL` 周期同步 Caddy 证书到 Relay 挂载目录。
