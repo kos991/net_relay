@@ -47,6 +47,10 @@ crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:sync
 
 如需覆盖镜像，可在运行脚本前设置 `RELAY_IMAGE`、`CADDY_IMAGE`、`SYNC_IMAGE`。
 
+## 脚本升级
+
+再次执行一键脚本会升级安装器文件，但不会删除 `.env`、`relay.env`、`docker-compose.yml`、`data/`、证书目录和 `caddy/Caddyfile`。
+
 ## 运行边界
 
 - 一键脚本不安装 Docker，只在 Docker 未启动时尝试通过 `rc-service`、`systemctl` 或 `service` 启动 Docker。

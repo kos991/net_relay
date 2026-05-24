@@ -55,6 +55,24 @@ download_file() {
   fi
 }
 
+sync_installer_files() {
+  local source_dir="$1"
+
+  mkdir -p "$INSTALL_DIR"
+  log "正在同步安装器文件到：${INSTALL_DIR}"
+  warn "保留现有配置和数据：.env、relay.env、docker-compose.yml、data/、证书和 Caddyfile。"
+
+  tar -C "$source_dir" \
+    --exclude=.env \
+    --exclude=relay.env \
+    --exclude=docker-compose.yml \
+    --exclude=data \
+    --exclude=certs \
+    --exclude=caddy/Caddyfile \
+    --exclude=.git \
+    -cf - . | tar -C "$INSTALL_DIR" -xf -
+}
+
 need_root_for_install_dir() {
   if [[ "${EUID}" -ne 0 && "$INSTALL_DIR" == /opt/* ]]; then
     fail "请使用 root 执行，或通过 INSTALL_DIR 指定当前用户可写目录。"
@@ -73,11 +91,11 @@ download_with_tarball() {
     fail "需要安装 git、curl 或 wget 之一，用于下载安装器。"
   fi
 
-  rm -rf "$INSTALL_DIR"
-  mkdir -p "$INSTALL_DIR"
   tar -xzf "$tmp_dir/repo.tar.gz" -C "$tmp_dir"
-  shopt -s dotglob nullglob
-  mv "$tmp_dir"/net_relay-*/* "$INSTALL_DIR"/
+  shopt -s nullglob
+  local extracted_dirs=("$tmp_dir"/net_relay-*)
+  (( ${#extracted_dirs[@]} > 0 )) || fail "安装包解压失败，未找到 net_relay-* 目录。"
+  sync_installer_files "${extracted_dirs[0]}"
   rm -rf "$tmp_dir"
 }
 
