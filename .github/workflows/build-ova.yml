@@ -141,7 +141,6 @@ jobs:
             --copy-in ova-build/netbird-relay-installer:/opt \
             --copy-in ova/files/rels:/usr/local/sbin \
             --copy-in ova/files/net-relay-firstboot:/usr/local/sbin \
-            --copy-in ova/files/net-relay-hw-check:/usr/local/sbin \
             --copy-in ova/files/sshd_config:/etc/ssh \
             --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in ova/files/root-profile:/root \
@@ -153,7 +152,7 @@ jobs:
             --run-command "ssh-keygen -A" \
             --run-command "sshd -t" \
             --run-command "printf 'sshd effective config: '; grep -E '^(Port|PermitRootLogin|PasswordAuthentication|PubkeyAuthentication) ' /etc/ssh/sshd_config" \
-            --run-command "chmod +x /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /usr/local/sbin/net-relay-hw-check /opt/netbird-relay-installer/setup-relay.sh" \
+            --run-command "chmod +x /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /opt/netbird-relay-installer/setup-relay.sh" \
             --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile" 2>&1 | tee ova-build/virt-customize.log
           status="${PIPESTATUS[0]}"
           if [ "$status" -ne 0 ]; then
