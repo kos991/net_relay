@@ -3,11 +3,11 @@ name: build-ova
 on:
   push:
     tags:
-      - "ova-*"
+      - "v*"
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag, empty means ova-YYYYmmddHHMMSS"
+        description: "Release tag, empty means next v1.0.N"
         required: false
         default: ""
       relay_image:
@@ -25,7 +25,6 @@ jobs:
       ALPINE_IMAGE_URL: https://dev.alpinelinux.org/~tomalok/alpine-cloud-images/v3.23/nocloud/x86_64/nocloud_alpine-3.23.4-x86_64-bios-cloudinit-r0.qcow2
       OVA_NAME: net-relay-alpine-x86_64.ova
       QCOW2_NAME: net-relay-alpine-x86_64.qcow2.gz
-      VHD_NAME: net-relay-alpine-x86_64.vhd.gz
       SYSTEM_DISK_GB: 3
       DEFAULT_IMAGE_REPOSITORY: crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels
       RELAY_IMAGE: ${{ github.event.inputs.relay_image || 'crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay' }}
@@ -34,6 +33,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install build tools
         run: |
@@ -50,8 +51,19 @@ jobs:
           elif [ -n "${RELEASE_TAG_INPUT}" ]; then
             release_tag="${RELEASE_TAG_INPUT}"
           else
-            release_tag="ova-$(date -u +%Y%m%d%H%M%S)"
+            git fetch --tags --force
+            latest_patch="$(git tag -l 'v1.0.*' | sed -n 's/^v1\.0\.\([0-9][0-9]*\)$/\1/p' | sort -n | tail -1)"
+            if [ -z "${latest_patch}" ]; then
+              release_tag="v1.0.0"
+            else
+              release_tag="v1.0.$((latest_patch + 1))"
+            fi
           fi
+
+          case "${release_tag}" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::Release tag must use semantic format, for example v1.0.0"; exit 1 ;;
+          esac
 
           root_password="Net@rels2026"
           ssh_port="$(python3 -c "import secrets; print(secrets.randbelow(45536) + 20000)")"
@@ -68,10 +80,8 @@ jobs:
           mkdir -p ova-build/apks
           docker run --rm -v "$PWD/ova-build/apks:/out" alpine:3.23 sh -c '
             set -e
-            # 启用 community 仓库
             sed -i "/community/s/^#//" /etc/apk/repositories
             apk update
-            echo "Fetching packages..."
             apk fetch --recursive --output /out \
               bash wget curl git vim nano unzip zip rsync \
               docker docker-openrc docker-cli-compose \
@@ -80,12 +90,11 @@ jobs:
               qemu-guest-agent \
               net-tools iproute2 iputils iputils-tracepath \
               bind-tools busybox-extras lsof || {
-              echo "Failed to fetch some packages, checking availability..."
+              echo "Failed to fetch required packages."
               apk search cloud-init
               apk search qemu-guest-agent
               exit 1
             }
-            echo "Packages fetched successfully"
             ls -lh /out | head -20
           '
 
@@ -239,26 +248,13 @@ jobs:
           tar -C release -cf "release/${OVA_NAME}" net-relay-alpine-x86_64.ovf net-relay-alpine-x86_64.vmdk
           qemu-img convert -p -O qcow2 -c ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.qcow2
           gzip -9 release/net-relay-alpine-x86_64.qcow2
-          qemu-img convert -p -O vpc -o subformat=dynamic,force_size=on ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vhd
-          gzip -9 release/net-relay-alpine-x86_64.vhd
 
-          (cd release && sha256sum "$OVA_NAME" "$QCOW2_NAME" "$VHD_NAME" > SHA256SUMS)
+          (cd release && sha256sum "$OVA_NAME" "$QCOW2_NAME" > SHA256SUMS)
 
       - name: Write release notes
         run: |
           cat > release/RELEASE_NOTES.md <<EOF
-          # NetBird Relay Alpine 镜像
-
-          镜像说明：
-          - 中文交互安装流程
-          - 支持 Cloudflare DNS challenge 自动签发证书
-          - 支持自定义 Relay TCP 端口和 STUN UDP 端口
-          - 默认从阿里云 ACR 公网拉取镜像：${RELAY_IMAGE}、${CADDY_IMAGE}、${SYNC_IMAGE}
-          - 自动启动 Caddy、证书同步服务和 NetBird Relay
-          - 安装完成后输出 NetBird Management 配置片段
-          - 内置 cloud-init、qemu-guest-agent、BBR 和基础网络工具
-          - 可执行 \`net-relay-hw-check\` 检查 cloud-init、virtio/NVMe、BBR 和工具状态
-          - 阿里云导入前建议再使用官方镜像规范检测工具做最终检查
+          # NetBird Relay OVA
 
           登录信息：
           - 用户名：root
@@ -266,16 +262,17 @@ jobs:
           - SSH 端口：${{ steps.meta.outputs.ssh_port }}
 
           下载文件：
-          - \`${OVA_NAME}\`：VMware / ESXi 6.7+
+          - \`${OVA_NAME}\`：VMware / ESXi
           - \`${QCOW2_NAME}\`：KVM / Proxmox / 阿里云
-          - \`${VHD_NAME}\`：Xen / Hyper-V
           - \`SHA256SUMS\`：校验文件
+
+          运行说明：
+          - OVA 首次登录会先自检 Docker、Docker Compose、磁盘空间和 ACR 镜像拉取。
+          - 运行镜像默认从阿里云 ACR 公网拉取：\`${RELAY_IMAGE}\`、\`${CADDY_IMAGE}\`、\`${SYNC_IMAGE}\`。
+          - 一键脚本命令：\`bash <(curl -sSL https://rels.jinfei.org/main.sh)\`
 
           本次更新：
           - ${{ steps.meta.outputs.update_note }}
-
-          安装命令：
-          \`bash <(curl -sSL https://rels.jinfei.org/main.sh)\`
           EOF
 
       - name: Publish release
@@ -292,5 +289,4 @@ jobs:
             --notes-file release/RELEASE_NOTES.md \
             "release/${OVA_NAME}" \
             "release/${QCOW2_NAME}" \
-            "release/${VHD_NAME}" \
             release/SHA256SUMS
