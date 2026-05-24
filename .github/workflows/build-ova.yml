@@ -11,9 +11,9 @@ on:
         required: false
         default: ""
       relay_image:
-        description: "NetBird relay image to preload"
+        description: "Relay image to use in OVA"
         required: false
-        default: "netbirdio/relay:latest"
+        default: "crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay"
 
 permissions:
   contents: write
