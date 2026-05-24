@@ -64,9 +64,70 @@ force_start_docker() {
     rm -f /run/docker.pid /var/run/docker.pid /run/docker.sock /var/run/docker.sock
     rc-service docker start >/dev/null 2>&1 || true
   elif command -v systemctl >/dev/null 2>&1; then
+    systemctl enable docker >/dev/null 2>&1 || true
     systemctl restart docker || systemctl start docker || true
   elif command -v service >/dev/null 2>&1; then
     service docker restart || service docker start || true
+  fi
+}
+
+install_docker_with_apk() {
+  log "Installing Docker with apk."
+  apk update
+  apk add --no-cache docker docker-openrc docker-cli-compose
+  rc-update add docker default >/dev/null 2>&1 || true
+}
+
+install_docker_with_apt() {
+  log "Installing Docker with apt."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y docker.io docker-compose-plugin ca-certificates curl
+  systemctl enable docker >/dev/null 2>&1 || true
+}
+
+install_docker_with_yum_or_dnf() {
+  local pkg_cmd="$1"
+
+  log "Installing Docker with ${pkg_cmd}."
+  if "${pkg_cmd}" install -y moby-engine docker-compose-plugin; then
+    :
+  elif "${pkg_cmd}" install -y docker docker-compose-plugin; then
+    :
+  else
+    require_cmd curl
+    warn "Native Docker packages were unavailable. Falling back to get.docker.com."
+    curl -fsSL https://get.docker.com | bash
+  fi
+  systemctl enable docker >/dev/null 2>&1 || true
+}
+
+install_docker_native() {
+  if command -v apk >/dev/null 2>&1; then
+    install_docker_with_apk
+  elif command -v apt-get >/dev/null 2>&1; then
+    install_docker_with_apt
+  elif command -v dnf >/dev/null 2>&1; then
+    install_docker_with_yum_or_dnf dnf
+  elif command -v yum >/dev/null 2>&1; then
+    install_docker_with_yum_or_dnf yum
+  else
+    require_cmd curl
+    warn "No supported package manager found. Falling back to get.docker.com."
+    curl -fsSL https://get.docker.com | bash
+  fi
+}
+
+show_docker_diagnostics() {
+  warn "Docker diagnostics:"
+  command -v docker >/dev/null 2>&1 && docker version || true
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl status docker --no-pager -l || true
+    journalctl -u docker --no-pager -n 50 || true
+  elif command -v rc-service >/dev/null 2>&1; then
+    rc-service docker status || true
+  elif command -v service >/dev/null 2>&1; then
+    service docker status || true
   fi
 }
 
@@ -157,18 +218,25 @@ ensure_permissions() {
 
 ensure_docker() {
   if ! command -v docker >/dev/null 2>&1; then
-    warn "Docker was not found. Installing Docker from get.docker.com."
-    require_cmd curl
-    curl -fsSL https://get.docker.com | bash
+    warn "Docker was not found. Installing Docker."
+    install_docker_native
   fi
 
   if ! docker info >/dev/null 2>&1; then
     warn "Docker is not running. Trying to start it."
     force_start_docker
-    wait_for_docker || true
+    if ! wait_for_docker; then
+      warn "Docker still unavailable. Reinstalling or repairing Docker packages."
+      install_docker_native
+      force_start_docker
+      wait_for_docker || true
+    fi
   fi
 
-  docker info >/dev/null 2>&1 || fail "Docker is unavailable. Start Docker and retry."
+  if ! docker info >/dev/null 2>&1; then
+    show_docker_diagnostics
+    fail "Docker is unavailable after installation/start attempts."
+  fi
 
   if docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker compose)
