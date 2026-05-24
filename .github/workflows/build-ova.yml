@@ -257,24 +257,11 @@ jobs:
       - name: Write release notes
         run: |
           cat > release/RELEASE_NOTES.md <<EOF
-          # NetBird Relay OVA
+          # NetBird Relay ${{ steps.meta.outputs.version }}
 
-          登录信息：
-          - 用户名：root
-          - 密码：${{ steps.meta.outputs.root_password }}
-          - SSH 端口：${{ steps.meta.outputs.ssh_port }}
-
-          下载文件：
-          - \`${OVA_NAME}\`：VMware / ESXi
-          - \`${QCOW2_NAME}\`：KVM / Proxmox / 阿里云
-          - \`${INSTALLER_ARCHIVE_NAME}\`：一键脚本离线安装包
-          - \`install.sh\`：一键安装入口
-          - \`SHA256SUMS\`：校验文件
-
-          运行说明：
-          - OVA 首次登录会先自检 Docker、Docker Compose、磁盘空间和 ACR 镜像拉取。
-          - 运行镜像默认从阿里云 ACR 公网拉取：\`${RELAY_IMAGE}\`、\`${CADDY_IMAGE}\`、\`${SYNC_IMAGE}\`。
-          - 一键脚本命令：\`bash <(curl -sSL https://rels.jinfei.org)\`
+          \`\`\`bash
+          bash <(curl -sSL https://rels.jinfei.org)
+          \`\`\`
 
           本次更新：
           - ${{ steps.meta.outputs.update_note }}
