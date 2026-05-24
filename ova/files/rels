@@ -5,7 +5,7 @@ INSTALLER_DIR="/opt/netbird-relay-installer"
 COMPOSE_CMD=()
 
 fail() {
-  echo "ERROR: $*" >&2
+  echo "错误：$*" >&2
   exit 1
 }
 
@@ -15,12 +15,12 @@ detect_compose() {
   elif command -v docker-compose >/dev/null 2>&1; then
     COMPOSE_CMD=(docker-compose)
   else
-    fail "Docker Compose is unavailable."
+    fail "Docker Compose 不可用。"
   fi
 }
 
 require_installer_dir() {
-  [[ -d "$INSTALLER_DIR" ]] || fail "Installer directory not found: ${INSTALLER_DIR}"
+  [[ -d "$INSTALLER_DIR" ]] || fail "安装器目录不存在：${INSTALLER_DIR}"
 }
 
 ensure_ova_docker() {
@@ -28,7 +28,7 @@ ensure_ova_docker() {
     return 0
   fi
 
-  echo "Docker is not ready. Restarting Docker service..."
+  echo "Docker 未就绪，正在重启 Docker 服务..."
   rc-service docker stop >/dev/null 2>&1 || true
   rm -f /run/docker.pid /var/run/docker.pid /run/docker.sock /var/run/docker.sock
   rc-service docker start >/dev/null 2>&1 || true
@@ -42,12 +42,12 @@ ensure_ova_docker() {
     attempts=$((attempts - 1))
   done
 
-  fail "Docker is unavailable. Check: rc-service docker status"
+  fail "Docker 不可用，请执行：rc-service docker status"
 }
 
 require_compose_file() {
   require_installer_dir
-  [[ -f "${INSTALLER_DIR}/docker-compose.yml" ]] || fail "docker-compose.yml not found. Run install first."
+  [[ -f "${INSTALLER_DIR}/docker-compose.yml" ]] || fail "未找到 docker-compose.yml，请先执行安装或重新配置。"
 }
 
 run_install() {
@@ -62,10 +62,13 @@ upgrade_images() {
   require_compose_file
   detect_compose
   cd "$INSTALLER_DIR"
-  # Equivalent to: docker compose pull && docker compose up -d
+  echo "正在拉取最新镜像..."
   "${COMPOSE_CMD[@]}" -f docker-compose.yml pull
+  echo "正在重启服务..."
   "${COMPOSE_CMD[@]}" -f docker-compose.yml up -d
+  echo "正在清理未使用镜像..."
   docker image prune -f
+  echo "镜像更新完成。"
 }
 
 show_status() {
@@ -96,21 +99,21 @@ print_menu() {
   clear || true
   cat <<'EOF'
 =================================================
-              NetBird Relay OVA Menu
+              NetBird Relay 管理菜单
 =================================================
-1) Install or reconfigure relay
-2) Upgrade images and restart services
-3) Show service status
-4) Follow service logs
-5) Restart services
-0) Exit
+1) 安装或重新配置 Relay
+2) 更新镜像并重启服务
+3) 查看服务状态
+4) 查看服务日志
+5) 重启服务
+0) 退出
 =================================================
 EOF
 }
 
 while true; do
   print_menu
-  printf 'Select: '
+  printf '请选择：'
   IFS= read -r choice
   case "$choice" in
     1) run_install ;;
@@ -119,8 +122,8 @@ while true; do
     4) show_logs ;;
     5) restart_services ;;
     0) exit 0 ;;
-    *) echo "Invalid choice: ${choice}" ;;
+    *) echo "无效选择：${choice}" ;;
   esac
-  printf '\nPress Enter to continue...'
+  printf '\n按 Enter 继续...'
   IFS= read -r _
 done

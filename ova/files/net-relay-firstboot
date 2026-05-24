@@ -4,13 +4,27 @@ set -euo pipefail
 FLAG="/var/lib/net-relay/firstboot.done"
 INSTALLER_DIR="/opt/netbird-relay-installer"
 
+RELAY_IMAGE="${RELAY_IMAGE:-__RELAY_IMAGE__}"
+CADDY_IMAGE="${CADDY_IMAGE:-__CADDY_IMAGE__}"
+SYNC_IMAGE="${SYNC_IMAGE:-__SYNC_IMAGE__}"
+
+if [[ "$RELAY_IMAGE" == "__RELAY_IMAGE__" ]]; then
+  RELAY_IMAGE="crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay"
+fi
+if [[ "$CADDY_IMAGE" == "__CADDY_IMAGE__" ]]; then
+  CADDY_IMAGE="crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:caddy"
+fi
+if [[ "$SYNC_IMAGE" == "__SYNC_IMAGE__" ]]; then
+  SYNC_IMAGE="crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:sync"
+fi
+
 fail() {
-  echo "ERROR: $*" >&2
+  echo "错误：$*" >&2
   exit 1
 }
 
 check_cmd() {
-  command -v "$1" >/dev/null 2>&1 || fail "Missing required command: $1"
+  command -v "$1" >/dev/null 2>&1 || fail "缺少必要命令：$1"
 }
 
 wait_for_docker() {
@@ -32,7 +46,7 @@ force_start_docker() {
 }
 
 check_compose() {
-  docker compose version >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1 || fail "Docker Compose is unavailable."
+  docker compose version >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1 || fail "Docker Compose 不可用。"
 }
 
 check_disk_space() {
@@ -45,34 +59,34 @@ check_disk_space() {
   fi
 
   available_mb="$(df -Pm "$target" | awk 'NR == 2 {print $4}')"
-  [[ "$available_mb" =~ ^[0-9]+$ ]] || fail "Unable to check free disk space on ${target}."
-  (( available_mb >= min_mb )) || fail "Need at least ${min_mb} MB free on ${target}; available ${available_mb} MB."
+  [[ "$available_mb" =~ ^[0-9]+$ ]] || fail "无法检查 ${target} 的剩余磁盘空间。"
+  (( available_mb >= min_mb )) || fail "${target} 至少需要 ${min_mb} MB 可用空间，当前仅 ${available_mb} MB。"
 }
 
 check_image_pull() {
   local image="$1"
 
-  echo "Checking image: ${image}"
+  echo "检查镜像：${image}"
   if docker image inspect "$image" >/dev/null 2>&1; then
     return 0
   fi
-  docker pull "$image" >/dev/null || fail "Unable to pull image: ${image}"
+  docker pull "$image" >/dev/null || fail "无法拉取镜像：${image}"
 }
 
 run_preflight_checks() {
-  echo "Running OVA preflight checks..."
-  [[ -d "$INSTALLER_DIR" ]] || fail "Installer directory not found: ${INSTALLER_DIR}"
+  echo "正在执行 OVA 启动自检..."
+  [[ -d "$INSTALLER_DIR" ]] || fail "安装器目录不存在：${INSTALLER_DIR}"
   check_cmd bash
   check_cmd curl
   check_cmd docker
   check_cmd openssl
-  docker info >/dev/null 2>&1 || fail "Docker daemon is unavailable."
+  docker info >/dev/null 2>&1 || fail "Docker 服务不可用。"
   check_compose
   check_disk_space
   check_image_pull "${RELAY_IMAGE}"
   check_image_pull "${CADDY_IMAGE}"
   check_image_pull "${SYNC_IMAGE}"
-  echo "Preflight checks passed."
+  echo "自检完成。"
 }
 
 if [[ -f "$FLAG" ]]; then
@@ -82,31 +96,24 @@ fi
 clear || true
 cat <<'EOF'
 =================================================
-              NetBird Relay OVA
+          NetBird Relay OVA 初始化引导
 =================================================
 
-Tip:
-- The VMware console may not display Chinese fonts.
-- For a better setup experience, SSH into this VM.
-- The installer will check Docker, Compose, disk space and images first.
+默认登录信息：
+- 用户名：root
+- SSH 端口：__SSH_PORT__
+
+使用说明：
+- 首次登录会自动检查 Docker、Docker Compose、磁盘空间和运行镜像。
+- 完成首次配置后，可随时执行 rels 打开管理菜单。
 
 =================================================
 EOF
 
 if ! wait_for_docker; then
-  echo "Docker is not ready. Restarting Docker service..."
+  echo "Docker 未就绪，正在重启 Docker 服务..."
   force_start_docker
-  wait_for_docker || fail "Docker is unavailable after restart. Check: rc-service docker status"
-fi
-
-if [[ "${RELAY_IMAGE:-__RELAY_IMAGE__}" == "__RELAY_IMAGE__" ]]; then
-  RELAY_IMAGE="crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay"
-fi
-if [[ "${CADDY_IMAGE:-__CADDY_IMAGE__}" == "__CADDY_IMAGE__" ]]; then
-  CADDY_IMAGE="crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:caddy"
-fi
-if [[ "${SYNC_IMAGE:-__SYNC_IMAGE__}" == "__SYNC_IMAGE__" ]]; then
-  SYNC_IMAGE="crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:sync"
+  wait_for_docker || fail "Docker 重启后仍不可用，请执行：rc-service docker status"
 fi
 
 run_preflight_checks

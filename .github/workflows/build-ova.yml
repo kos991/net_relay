@@ -37,6 +37,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check OVA scripts
+        run: bash tests/ova-scripts-check.sh
+
       - name: Install build tools
         run: |
           sudo apt-get update
@@ -145,6 +148,7 @@ jobs:
             --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in ova/files/root-profile:/root \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
+            --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
             --run-command "sed -i 's#__RELAY_IMAGE__#${RELAY_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
             --run-command "sed -i 's#__CADDY_IMAGE__#${CADDY_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
             --run-command "sed -i 's#__SYNC_IMAGE__#${SYNC_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
@@ -257,7 +261,7 @@ jobs:
       - name: Write release notes
         run: |
           cat > release/RELEASE_NOTES.md <<EOF
-          # NetBird Relay ${{ steps.meta.outputs.version }}
+          # NetBird Relay ${{ steps.meta.outputs.release_tag }}
 
           \`\`\`bash
           bash <(curl -sSL https://rels.jinfei.org)
