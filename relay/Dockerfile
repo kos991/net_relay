@@ -1,0 +1,1 @@
+FROM netbirdio/relay:latest

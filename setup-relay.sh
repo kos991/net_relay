@@ -8,6 +8,10 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 COMPOSE_CMD=()
+DEFAULT_IMAGE_REPOSITORY="${DEFAULT_IMAGE_REPOSITORY:-crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels}"
+RELAY_IMAGE_DEFAULT="${RELAY_IMAGE_DEFAULT:-${DEFAULT_IMAGE_REPOSITORY}:relay}"
+CADDY_IMAGE_DEFAULT="${CADDY_IMAGE_DEFAULT:-${DEFAULT_IMAGE_REPOSITORY}:caddy}"
+SYNC_IMAGE_DEFAULT="${SYNC_IMAGE_DEFAULT:-${DEFAULT_IMAGE_REPOSITORY}:sync}"
 
 print_header() {
   echo -e "${GREEN}=================================================${NC}"
@@ -194,6 +198,8 @@ ACME_EMAIL=${ACME_EMAIL}
 CF_API_TOKEN=${CF_API_TOKEN}
 RELAY_AUTH_SECRET=${RELAY_AUTH_SECRET}
 RELAY_IMAGE=${RELAY_IMAGE}
+CADDY_IMAGE=${CADDY_IMAGE}
+SYNC_IMAGE=${SYNC_IMAGE}
 CADDY_HTTP_PORT=${CADDY_HTTP_PORT}
 CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT}
 SYNC_INTERVAL=${SYNC_INTERVAL}
@@ -233,7 +239,7 @@ write_compose_file() {
 services:
   caddy:
 EOF
-    write_compose_service_source "${CADDY_IMAGE:-}" "./caddy"
+    write_compose_service_source "${CADDY_IMAGE}" "./caddy"
     cat <<EOF
     container_name: netbird-caddy-cert
     restart: unless-stopped
@@ -246,7 +252,7 @@ EOF
 
   sync-relay-certs:
 EOF
-    write_compose_service_source "${SYNC_IMAGE:-}" "./sync"
+    write_compose_service_source "${SYNC_IMAGE}" "./sync"
     cat <<EOF
     container_name: netbird-relay-cert-sync
     restart: unless-stopped
@@ -361,7 +367,9 @@ ACME_EMAIL="$(prompt_nonempty 'ACME email: ')"
 CF_API_TOKEN="$(read_secret 'Cloudflare API Token: ')"
 RELAY_PORT="$(prompt_default 'Relay TCP port [8443]: ' '8443')"
 STUN_PORT="$(prompt_default 'STUN UDP port [3478]: ' '3478')"
-RELAY_IMAGE_DEFAULT="${RELAY_IMAGE:-netbirdio/relay:latest}"
+CADDY_IMAGE="${CADDY_IMAGE:-${CADDY_IMAGE_DEFAULT}}"
+SYNC_IMAGE="${SYNC_IMAGE:-${SYNC_IMAGE_DEFAULT}}"
+RELAY_IMAGE_DEFAULT="${RELAY_IMAGE:-${RELAY_IMAGE_DEFAULT}}"
 RELAY_IMAGE="$(prompt_default "Relay image [${RELAY_IMAGE_DEFAULT}]: " "${RELAY_IMAGE_DEFAULT}")"
 RELAY_IMAGE="$(normalize_relay_image "$RELAY_IMAGE")"
 SYNC_INTERVAL="$(prompt_default 'Certificate sync interval seconds [60]: ' '60')"

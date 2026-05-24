@@ -20,7 +20,7 @@ Relay 域名：例如 rels.jinfei.org
 Cloudflare API Token：用于 DNS-01 证书签发
 Relay TCP 端口：默认 8443
 STUN UDP 端口：默认 3478
-Relay 镜像：默认 netbirdio/relay:latest，也可只填 latest
+Relay 镜像：默认 `crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay`
 证书同步间隔：默认 60 秒
 共享密钥：可留空自动生成
 ```
@@ -49,6 +49,46 @@ cd /opt/netbird-relay-installer
 docker compose ps
 docker compose logs -f caddy sync-relay-certs relay
 docker compose restart relay
+```
+
+## 默认镜像
+
+VPS 一键安装默认使用阿里云 ACR 公网镜像，不修改 Docker registry mirror：
+
+```text
+crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay
+crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:caddy
+crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:sync
+```
+
+如需覆盖，可在执行脚本前设置 `RELAY_IMAGE`、`CADDY_IMAGE`、`SYNC_IMAGE`。
+
+### 阿里云 ACR 构建规则
+
+在仓库 `netrels/netrels` 中添加 3 条构建规则：
+
+```text
+类型：Branch
+Branch/Tag：main
+构建上下文目录：/caddy/
+Dockerfile文件名：Dockerfile
+镜像版本：caddy
+```
+
+```text
+类型：Branch
+Branch/Tag：main
+构建上下文目录：/sync/
+Dockerfile文件名：Dockerfile
+镜像版本：sync
+```
+
+```text
+类型：Branch
+Branch/Tag：main
+构建上下文目录：/relay/
+Dockerfile文件名：Dockerfile
+镜像版本：relay
 ```
 
 ## 镜像
