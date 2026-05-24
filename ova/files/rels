@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+INSTALLER_DIR="/opt/netbird-relay-installer"
+COMPOSE_CMD=()
+
+fail() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+detect_compose() {
+  if docker compose version >/dev/null 2>&1; then
+    COMPOSE_CMD=(docker compose)
+  elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE_CMD=(docker-compose)
+  else
+    fail "Docker Compose is unavailable."
+  fi
+}
+
+require_installer_dir() {
+  [[ -d "$INSTALLER_DIR" ]] || fail "Installer directory not found: ${INSTALLER_DIR}"
+}
+
+ensure_ova_docker() {
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "Docker is not ready. Restarting Docker service..."
+  rc-service docker stop >/dev/null 2>&1 || true
+  rm -f /run/docker.pid /var/run/docker.pid /run/docker.sock /var/run/docker.sock
+  rc-service docker start >/dev/null 2>&1 || true
+
+  local attempts=60
+  while (( attempts > 0 )); do
+    if docker info >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+    attempts=$((attempts - 1))
+  done
+
+  fail "Docker is unavailable. Check: rc-service docker status"
+}
+
+require_compose_file() {
+  require_installer_dir
+  [[ -f "${INSTALLER_DIR}/docker-compose.yml" ]] || fail "docker-compose.yml not found. Run install first."
+}
+
+run_install() {
+  require_installer_dir
+  ensure_ova_docker
+  cd "$INSTALLER_DIR"
+  bash ./setup-relay.sh
+}
+
+upgrade_images() {
+  ensure_ova_docker
+  require_compose_file
+  detect_compose
+  cd "$INSTALLER_DIR"
+  # Equivalent to: docker compose pull && docker compose up -d
+  "${COMPOSE_CMD[@]}" -f docker-compose.yml pull
+  "${COMPOSE_CMD[@]}" -f docker-compose.yml up -d
+  docker image prune -f
+}
+
+show_status() {
+  ensure_ova_docker
+  require_compose_file
+  detect_compose
+  cd "$INSTALLER_DIR"
+  "${COMPOSE_CMD[@]}" -f docker-compose.yml ps
+}
+
+show_logs() {
+  ensure_ova_docker
+  require_compose_file
+  detect_compose
+  cd "$INSTALLER_DIR"
+  "${COMPOSE_CMD[@]}" -f docker-compose.yml logs -f --tail=120 caddy sync-relay-certs relay
+}
+
+restart_services() {
+  ensure_ova_docker
+  require_compose_file
+  detect_compose
+  cd "$INSTALLER_DIR"
+  "${COMPOSE_CMD[@]}" -f docker-compose.yml restart
+}
+
+run_hw_check() {
+  if command -v net-relay-hw-check >/dev/null 2>&1; then
+    net-relay-hw-check
+  else
+    fail "net-relay-hw-check not found."
+  fi
+}
+
+print_menu() {
+  clear || true
+  cat <<'EOF'
+=================================================
+              NetBird Relay OVA Menu
+=================================================
+1) Install or reconfigure relay
+2) Upgrade images and restart services
+3) Show service status
+4) Follow service logs
+5) Restart services
+6) Run OVA hardware check
+0) Exit
+=================================================
+EOF
+}
+
+while true; do
+  print_menu
+  printf 'Select: '
+  IFS= read -r choice
+  case "$choice" in
+    1) run_install ;;
+    2) upgrade_images ;;
+    3) show_status ;;
+    4) show_logs ;;
+    5) restart_services ;;
+    6) run_hw_check ;;
+    0) exit 0 ;;
+    *) echo "Invalid choice: ${choice}" ;;
+  esac
+  printf '\nPress Enter to continue...'
+  IFS= read -r _
+done

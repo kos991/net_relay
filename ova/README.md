@@ -25,6 +25,23 @@ OVA 由 GitHub Actions 构建并发布到 GitHub Releases。镜像不再内置�
 
 自检失败会停止安装并显示原因，避免用户在 OVA 内手工排查基础组件。
 
+## 快捷菜单
+
+OVA 内置 `rels` 命令，可随时调出可选项：
+
+```bash
+rels
+```
+
+菜单功能：
+
+- 安装或重新配置 Relay。
+- 拉取最新镜像并重启服务。
+- 查看服务状态。
+- 查看服务日志。
+- 重启服务。
+- 执行 OVA 硬件检查。
+
 ## 发布产物
 
 - `net-relay-alpine-x86_64.ova`：VMware / ESXi。

@@ -59,11 +59,7 @@ wait_for_docker() {
 }
 
 force_start_docker() {
-  if command -v rc-service >/dev/null 2>&1; then
-    rc-service docker stop >/dev/null 2>&1 || true
-    rm -f /run/docker.pid /var/run/docker.pid /run/docker.sock /var/run/docker.sock
-    rc-service docker start >/dev/null 2>&1 || true
-  elif command -v systemctl >/dev/null 2>&1; then
+  if command -v systemctl >/dev/null 2>&1; then
     systemctl restart docker || systemctl start docker || true
   elif command -v service >/dev/null 2>&1; then
     service docker restart || service docker start || true
@@ -76,8 +72,6 @@ show_docker_diagnostics() {
   if command -v systemctl >/dev/null 2>&1; then
     systemctl status docker --no-pager -l || true
     journalctl -u docker --no-pager -n 50 || true
-  elif command -v rc-service >/dev/null 2>&1; then
-    rc-service docker status || true
   elif command -v service >/dev/null 2>&1; then
     service docker status || true
   fi
