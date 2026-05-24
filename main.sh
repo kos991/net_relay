@@ -26,7 +26,7 @@ download_file() {
 
 download_file "$INSTALL_URL" "$tmp_file" || {
   echo "下载失败：${INSTALL_URL}" >&2
-  echo "请检查服务器能否访问 GitHub raw，或临时设置 INSTALL_URL 为可访问的 install.sh 地址。" >&2
+  echo "请检查安装入口是否可访问，或临时设置 INSTALL_URL 为可访问的 install.sh 地址。" >&2
   exit 1
 }
 

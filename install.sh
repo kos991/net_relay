@@ -85,19 +85,11 @@ sync_repo() {
   mkdir -p "$(dirname "$INSTALL_DIR")"
 
   if command -v git >/dev/null 2>&1; then
-    if [[ -d "$INSTALL_DIR/.git" ]]; then
-      log "正在更新安装器：${INSTALL_DIR}"
-      git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH" || fail "更新安装器失败，请检查服务器到 GitHub 的网络。"
-      git -C "$INSTALL_DIR" reset --hard "origin/${BRANCH}"
-    else
-      rm -rf "$INSTALL_DIR"
-      log "正在下载安装到：${INSTALL_DIR}"
-      git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR" || fail "下载安装器失败，请检查服务器到 GitHub 的网络。"
-    fi
+    warn "检测到 git，但默认使用 rels.jinfei.org 安装包以避免 GitHub 网络不稳定。"
   else
-    warn "未检测到 git，改用压缩包下载安装器。"
-    download_with_tarball
+    warn "未检测到 git，使用压缩包下载安装器。"
   fi
+  download_with_tarball
 }
 
 need_root_for_install_dir
