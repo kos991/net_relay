@@ -263,6 +263,11 @@ jobs:
           bash <(curl -sSL https://rels.jinfei.org)
           \`\`\`
 
+          OVA 登录：
+          - 用户名：root
+          - 密码：${{ steps.meta.outputs.root_password }}
+          - SSH 端口：${{ steps.meta.outputs.ssh_port }}
+
           本次更新：
           - ${{ steps.meta.outputs.update_note }}
           EOF
