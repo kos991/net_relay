@@ -4,3 +4,4 @@ data/
 certs/
 docker-compose.yml
 caddy/Caddyfile
+.worktrees/
