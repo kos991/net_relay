@@ -129,6 +129,36 @@ prompt_default() {
   printf '%s' "$value"
 }
 
+select_relay_group_mode() {
+  local value=""
+
+  while true; do
+    cat >&2 <<'EOF'
+部署模式：
+  1. 创建新的 Relay 节点组
+  2. 加入已有 Relay 节点组
+EOF
+    value="$(read_input '请选择部署模式 [1]: ')"
+    if [[ -z "$value" || "$value" == "1" ]]; then
+      printf 'create'
+      return 0
+    fi
+    if [[ "$value" == "2" ]]; then
+      printf 'join'
+      return 0
+    fi
+    warn "请输入 1 或 2。"
+  done
+}
+
+read_relay_auth_secret() {
+  if [[ "$RELAY_GROUP_MODE" == "join" ]]; then
+    read_secret '已有节点组 secret（必填）：'
+  else
+    read_secret '认证密钥 secret（可留空自动生成；多节点请保存并复用）：'
+  fi
+}
+
 validate_port() {
   local port="$1"
   [[ "$port" =~ ^[0-9]+$ ]] || return 1
@@ -203,6 +233,8 @@ ensure_directories() {
 write_env_files() {
   cat > "${SCRIPT_DIR}/.env" <<EOF
 RELAY_DOMAIN=${RELAY_DOMAIN}
+RELAY_GROUP_MODE=${RELAY_GROUP_MODE}
+RELAY_NODE_NAME=${RELAY_NODE_NAME}
 RELAY_PORT=${RELAY_PORT}
 STUN_PORT=${STUN_PORT}
 ACME_EMAIL=${ACME_EMAIL}
@@ -345,9 +377,16 @@ start_relay() {
 }
 
 print_summary() {
+  local mode_label="创建新的 Relay 节点组"
+  if [[ "$RELAY_GROUP_MODE" == "join" ]]; then
+    mode_label="加入已有 Relay 节点组"
+  fi
+
   cat <<EOF
 
 ==================== 安装完成 ====================
+当前节点组模式：${mode_label}
+当前节点名称：${RELAY_NODE_NAME}
 Relay 地址：rels://${RELAY_DOMAIN}:${RELAY_PORT}
 STUN 地址： stun:${RELAY_DOMAIN}:${STUN_PORT}
 认证密钥：  ${RELAY_AUTH_SECRET}
@@ -364,6 +403,16 @@ server:
 
 如果有多个 Relay 节点，所有节点和 Management 必须使用同一个 secret。
 
+如果这是追加节点，请把下面地址追加到现有 NetBird Management config.yaml：
+relays.addresses:
+  - "rels://${RELAY_DOMAIN}:${RELAY_PORT}"
+
+stuns:
+  - uri: "stun:${RELAY_DOMAIN}:${STUN_PORT}"
+    proto: udp
+
+所有 Relay 节点和 Management 必须使用 same secret。
+
 常用命令：
   cd ${SCRIPT_DIR}
   ${COMPOSE_CMD[*]} logs -f caddy sync-relay-certs relay
@@ -375,7 +424,9 @@ print_header
 ensure_permissions
 ensure_docker
 
+RELAY_GROUP_MODE="$(select_relay_group_mode)"
 RELAY_DOMAIN="$(prompt_nonempty 'Relay 域名，例如 rels.jinfei.org：')"
+RELAY_NODE_NAME="${RELAY_DOMAIN}"
 ACME_EMAIL="$(prompt_nonempty '证书申请邮箱 ACME Email：')"
 CF_API_TOKEN="$(read_secret 'Cloudflare API Token（输入不显示）：')"
 RELAY_PORT="$(prompt_default 'Relay TCP 端口 [8443]：' '8443')"
@@ -386,7 +437,7 @@ RELAY_IMAGE_DEFAULT="${RELAY_IMAGE:-${RELAY_IMAGE_DEFAULT}}"
 RELAY_IMAGE="$(prompt_default "Relay 镜像 [${RELAY_IMAGE_DEFAULT}]：" "${RELAY_IMAGE_DEFAULT}")"
 RELAY_IMAGE="$(normalize_relay_image "$RELAY_IMAGE")"
 SYNC_INTERVAL="$(prompt_default '证书同步间隔秒数 [60]：' '60')"
-RELAY_AUTH_SECRET="$(read_secret '认证密钥 secret（多节点请填同一个；留空自动生成）：')"
+RELAY_AUTH_SECRET="$(read_relay_auth_secret)"
 
 CADDY_HTTP_PORT=18080
 CADDY_HTTPS_PORT=18443
@@ -395,9 +446,13 @@ validate_port "$RELAY_PORT" || fail "Relay 端口无效：${RELAY_PORT}"
 validate_port "$STUN_PORT" || fail "STUN 端口无效：${STUN_PORT}"
 validate_port "$SYNC_INTERVAL" || fail "证书同步间隔无效：${SYNC_INTERVAL}"
 
+if [[ "$RELAY_GROUP_MODE" == "join" && -z "$RELAY_AUTH_SECRET" ]]; then
+  fail "must provide an existing relay auth secret when joining a relay node group."
+fi
+
 if [[ -z "$RELAY_AUTH_SECRET" ]]; then
   RELAY_AUTH_SECRET="$(generate_secret)"
-  log "已自动生成认证密钥。多 Relay 节点请把这个密钥复制到其它节点。"
+  log "已自动生成认证密钥。请保存这个 secret，后续 Relay 节点和 Management 必须使用同一个值。"
 fi
 
 ensure_directories

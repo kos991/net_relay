@@ -153,6 +153,7 @@ jobs:
             --run-command "sed -i 's#__CADDY_IMAGE__#${CADDY_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
             --run-command "sed -i 's#__SYNC_IMAGE__#${SYNC_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
             --run-command "passwd -u root || true" \
+            --run-command "chage -d 0 root || passwd -e root || true" \
             --run-command "ssh-keygen -A" \
             --run-command "sshd -t" \
             --run-command "printf 'sshd effective config: '; grep -E '^(Port|PermitRootLogin|PasswordAuthentication|PubkeyAuthentication) ' /etc/ssh/sshd_config" \
