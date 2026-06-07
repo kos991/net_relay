@@ -13,13 +13,6 @@ curl -sSL https://rels.jinfei.org | sh
 - `1` 官方二进制安装：推荐，不安装 Docker。
 - `2` Docker Compose：只用于一键安装，不进入 OVA 镜像。
 
-自动化可用：
-
-```bash
-INSTALL_MODE=binary curl -sSL https://rels.jinfei.org | sh
-INSTALL_MODE=compose curl -sSL https://rels.jinfei.org | sh
-```
-
 ## OVA 镜像
 
 - 镜像不内置 Docker/Compose。
