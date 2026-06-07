@@ -2,12 +2,10 @@ ROOT_PASSWORD_CONFIRM_FLAG="/var/lib/net-relay/root-password-confirmed"
 
 if [ -x /usr/local/sbin/net-relay-firstboot ] && [ ! -f /var/lib/net-relay/firstboot.done ]; then
   if [ ! -f "$ROOT_PASSWORD_CONFIRM_FLAG" ]; then
-    printf '%s\n' "首次初始化前请确认已经修改 root 密码。"
-    printf '%s' "已修改 root 密码？输入 yes 后继续初始化："
-    IFS= read -r root_password_confirm
-    if [ "$root_password_confirm" != "yes" ]; then
-      printf '%s\n' "已取消初始化。请先执行 passwd root 修改密码，然后重新登录。"
-      return 0 2>/dev/null || exit 0
+    printf '%s\n' "First login requires changing the root password before OVA initialization."
+    if ! passwd root; then
+      printf '%s\n' "Password change failed. Please run 'passwd root' and log in again."
+      return 1 2>/dev/null || exit 1
     fi
     mkdir -p "$(dirname "$ROOT_PASSWORD_CONFIRM_FLAG")"
     touch "$ROOT_PASSWORD_CONFIRM_FLAG"
