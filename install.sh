@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/kos991/net_relay.git}"
-ARCHIVE_URL="${ARCHIVE_URL:-https://rels.jinfei.org/net_relay-main.tar.gz}"
-ARCHIVE_FALLBACK_URL="${ARCHIVE_FALLBACK_URL:-https://github.com/kos991/net_relay/archive/refs/heads/main.tar.gz}"
+RELEASE_BASE="${RELEASE_BASE:-https://github.com/kos991/net_relay/releases/latest/download}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/netbird-relay-installer}"
-BRANCH="${BRANCH:-main}"
+BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
+CONFIG_DIR="${CONFIG_DIR:-/etc/netbird-relay}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
+
+OS_ID=""
+OS_ID_LIKE=""
+OS_VERSION_CODENAME=""
+OS_FAMILY=""
 
 log() {
   echo -e "${GREEN}$*${NC}"
@@ -25,95 +29,169 @@ fail() {
   exit 1
 }
 
+run_as_root() {
+  if [[ "${EUID}" -eq 0 ]]; then
+    "$@"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+  else
+    fail "需要 root 权限执行：$*。请使用 root 运行，或先安装 sudo 并授权当前用户。"
+  fi
+}
+
+detect_os() {
+  [[ -r /etc/os-release ]] || fail "无法识别系统：缺少 /etc/os-release。支持 Debian/Ubuntu/Rocky/Alma/Alpine。"
+
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  OS_ID="${ID:-}"
+  OS_ID_LIKE="${ID_LIKE:-}"
+  OS_VERSION_CODENAME="${VERSION_CODENAME:-}"
+
+  case " ${OS_ID} ${OS_ID_LIKE} " in
+    *" debian "*|*" ubuntu "*)
+      OS_FAMILY="debian"
+      ;;
+    *" rhel "*|*" fedora "*|*" rocky "*|*" almalinux "*|*" centos "*)
+      OS_FAMILY="rhel"
+      ;;
+    *" alpine "*)
+      OS_FAMILY="alpine"
+      ;;
+    *)
+      fail "不支持的系统：${PRETTY_NAME:-${OS_ID}}。当前支持 Debian/Ubuntu/Rocky/Alma/Alpine。"
+      ;;
+  esac
+}
+
+detect_arch() {
+  local machine
+  machine="$(uname -m)"
+  case "$machine" in
+    x86_64|amd64)
+      printf 'amd64'
+      ;;
+    aarch64|arm64)
+      printf 'arm64'
+      ;;
+    *)
+      fail "不支持的 CPU 架构：${machine}。当前支持 amd64/arm64。"
+      ;;
+  esac
+}
+
+install_base_dependencies() {
+  case "$OS_FAMILY" in
+    debian)
+      run_as_root apt-get update
+      run_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        bash \
+        ca-certificates \
+        curl \
+        openssl \
+        tar
+      ;;
+    rhel)
+      local pkg_manager="dnf"
+      command -v dnf >/dev/null 2>&1 || pkg_manager="yum"
+      run_as_root "$pkg_manager" install -y \
+        bash \
+        ca-certificates \
+        curl \
+        openssl \
+        tar
+      ;;
+    alpine)
+      run_as_root apk add --no-cache \
+        bash \
+        ca-certificates \
+        curl \
+        openssl \
+        tar
+      ;;
+  esac
+}
+
 download_file() {
   local url="$1"
   local output="$2"
-  local fallback_url="${3:-}"
 
-  log "正在下载安装器：${url}"
+  log "下载：${url}"
   if command -v curl >/dev/null 2>&1; then
-    if curl -fL --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 "$url" -o "$output"; then
-      return 0
-    fi
+    curl -fL --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 "$url" -o "$output"
   elif command -v wget >/dev/null 2>&1; then
-    if wget --timeout=10 --tries=3 -O "$output" "$url"; then
-      return 0
-    fi
+    wget --timeout=10 --tries=3 -O "$output" "$url"
   else
-    fail "需要安装 git、curl 或 wget 之一，用于下载安装器。"
+    fail "需要 curl 或 wget。"
   fi
+}
 
-  if [[ -n "$fallback_url" ]]; then
-    warn "主下载地址失败，尝试 GitHub 备用：${fallback_url}"
-    if command -v curl >/dev/null 2>&1; then
-      curl -fL --connect-timeout 10 --max-time 180 --retry 1 --retry-delay 2 "$fallback_url" -o "$output"
-    else
-      wget --timeout=10 --tries=2 -O "$output" "$fallback_url"
-    fi
+verify_sha256() {
+  local package_file="$1"
+  local sums_file="$2"
+  local package_name
+  package_name="$(basename "$package_file")"
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    (cd "$(dirname "$package_file")" && grep " ${package_name}$" "$sums_file" | sha256sum -c -)
+  elif command -v shasum >/dev/null 2>&1; then
+    (cd "$(dirname "$package_file")" && grep " ${package_name}$" "$sums_file" | shasum -a 256 -c -)
   else
-    return 1
+    warn "未找到 sha256sum/shasum，跳过 SHA256 校验。"
   fi
 }
 
-sync_installer_files() {
-  local source_dir="$1"
+download_relay_package() {
+  local arch="$1"
+  local output_dir="$2"
+  local package_name="netbird-relay-linux-${arch}.tar.gz"
 
-  mkdir -p "$INSTALL_DIR"
-  log "正在同步安装器文件到：${INSTALL_DIR}"
-  warn "保留现有配置和数据：.env、relay.env、docker-compose.yml、data/、证书和 Caddyfile。"
-
-  tar -C "$source_dir" \
-    --exclude=.env \
-    --exclude=relay.env \
-    --exclude=docker-compose.yml \
-    --exclude=data \
-    --exclude=certs \
-    --exclude=caddy/Caddyfile \
-    --exclude=.git \
-    -cf - . | tar -C "$INSTALL_DIR" -xf -
+  mkdir -p "$output_dir"
+  download_file "${RELEASE_BASE}/${package_name}" "${output_dir}/${package_name}"
+  download_file "${RELEASE_BASE}/SHA256SUMS" "${output_dir}/SHA256SUMS"
+  verify_sha256 "${output_dir}/${package_name}" "${output_dir}/SHA256SUMS"
+  printf '%s' "${output_dir}/${package_name}"
 }
 
-need_root_for_install_dir() {
-  if [[ "${EUID}" -ne 0 && "$INSTALL_DIR" == /opt/* ]]; then
-    fail "请使用 root 执行，或通过 INSTALL_DIR 指定当前用户可写目录。"
-  fi
-}
-
-download_with_tarball() {
+install_relay_binary() {
+  local package_file="$1"
   local tmp_dir
   tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
 
-  if command -v curl >/dev/null 2>&1; then
-    download_file "$ARCHIVE_URL" "$tmp_dir/repo.tar.gz" "$ARCHIVE_FALLBACK_URL"
-  elif command -v wget >/dev/null 2>&1; then
-    download_file "$ARCHIVE_URL" "$tmp_dir/repo.tar.gz" "$ARCHIVE_FALLBACK_URL"
-  else
-    fail "需要安装 git、curl 或 wget 之一，用于下载安装器。"
-  fi
+  tar -xzf "$package_file" -C "$tmp_dir"
+  [[ -x "${tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "安装包缺少 netbird-relay 二进制。"
 
-  tar -xzf "$tmp_dir/repo.tar.gz" -C "$tmp_dir"
-  shopt -s nullglob
-  local extracted_dirs=("$tmp_dir"/net_relay-*)
-  (( ${#extracted_dirs[@]} > 0 )) || fail "安装包解压失败，未找到 net_relay-* 目录。"
-  sync_installer_files "${extracted_dirs[0]}"
-  rm -rf "$tmp_dir"
+  run_as_root install -m 0755 -D "${tmp_dir}/netbird-relay/bin/netbird-relay" "$BIN_PATH"
+  run_as_root install -m 0644 -D "${tmp_dir}/netbird-relay/services/netbird-relay.service" /etc/systemd/system/netbird-relay.service
+  run_as_root install -m 0755 -D "${tmp_dir}/netbird-relay/services/netbird-relay.openrc" /etc/init.d/netbird-relay
 }
 
-sync_repo() {
-  mkdir -p "$(dirname "$INSTALL_DIR")"
+install_installer_files() {
+  local source_dir
+  source_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-  if command -v git >/dev/null 2>&1; then
-    warn "检测到 git，但默认使用 rels.jinfei.org 安装包以避免 GitHub 网络不稳定。"
-  else
-    warn "未检测到 git，使用压缩包下载安装器。"
-  fi
-  download_with_tarball
+  run_as_root mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
+  run_as_root cp "$source_dir/setup-relay.sh" "$INSTALL_DIR/setup-relay.sh"
+  run_as_root chmod +x "$INSTALL_DIR/setup-relay.sh"
 }
 
-need_root_for_install_dir
-sync_repo
-chmod +x "$INSTALL_DIR/setup-relay.sh"
+main() {
+  detect_os
+  install_base_dependencies
 
-log "正在启动安装器：${INSTALL_DIR}"
-cd "$INSTALL_DIR"
-exec ./setup-relay.sh
+  local arch package_file tmp_dir
+  arch="$(detect_arch)"
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' EXIT
+
+  package_file="$(download_relay_package "$arch" "$tmp_dir")"
+  install_relay_binary "$package_file"
+  install_installer_files
+
+  log "netbird-relay 二进制已安装：${BIN_PATH}"
+  log "正在启动配置向导。"
+  exec bash "$INSTALL_DIR/setup-relay.sh"
+}
+
+main "$@"

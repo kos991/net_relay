@@ -1,0 +1,19 @@
+[Unit]
+Description=NetBird Relay
+Documentation=https://github.com/netbirdio/netbird
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/netbird-relay/relay.env
+ExecStart=/usr/local/bin/netbird-relay
+Restart=always
+RestartSec=5
+DynamicUser=no
+User=root
+Group=root
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

@@ -2,153 +2,76 @@
 set -euo pipefail
 
 INSTALLER_DIR="/opt/netbird-relay-installer"
-COMPOSE_CMD=()
+ENV_FILE="/etc/netbird-relay/relay.env"
 
 fail() {
   echo "错误：$*" >&2
   exit 1
 }
 
-detect_compose() {
-  if docker compose version >/dev/null 2>&1; then
-    COMPOSE_CMD=(docker compose)
-  elif command -v docker-compose >/dev/null 2>&1; then
-    COMPOSE_CMD=(docker-compose)
-  else
-    fail "Docker Compose 不可用。"
-  fi
-}
-
 require_installer_dir() {
   [[ -d "$INSTALLER_DIR" ]] || fail "安装器目录不存在：${INSTALLER_DIR}"
 }
 
-ensure_ova_docker() {
-  if docker info >/dev/null 2>&1; then
-    return 0
-  fi
-
-  echo "Docker 未就绪，正在重启 Docker 服务..."
-  rc-service docker stop >/dev/null 2>&1 || true
-  rm -f /run/docker.pid /var/run/docker.pid /run/docker.sock /var/run/docker.sock
-  rc-service docker start >/dev/null 2>&1 || true
-
-  local attempts=60
-  while (( attempts > 0 )); do
-    if docker info >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 1
-    attempts=$((attempts - 1))
-  done
-
-  fail "Docker 不可用，请执行：rc-service docker status"
-}
-
-require_compose_file() {
-  require_installer_dir
-  [[ -f "${INSTALLER_DIR}/docker-compose.yml" ]] || fail "未找到 docker-compose.yml，请先执行安装或重新配置。"
-}
-
 run_install() {
   require_installer_dir
-  ensure_ova_docker
   cd "$INSTALLER_DIR"
   bash ./setup-relay.sh
 }
 
-upgrade_images() {
-  ensure_ova_docker
-  require_compose_file
-  detect_compose
+update_binary() {
+  require_installer_dir
   cd "$INSTALLER_DIR"
-  echo "正在拉取最新镜像..."
-  "${COMPOSE_CMD[@]}" -f docker-compose.yml pull
-  echo "正在重启服务..."
-  "${COMPOSE_CMD[@]}" -f docker-compose.yml up -d
-  echo "正在清理未使用镜像..."
-  docker image prune -f
-  echo "镜像更新完成。"
+  echo "正在下载并安装最新 netbird-relay 二进制..."
+  bash ./install.sh
 }
 
 show_status() {
-  ensure_ova_docker
-  require_compose_file
-  detect_compose
-  cd "$INSTALLER_DIR"
-  "${COMPOSE_CMD[@]}" -f docker-compose.yml ps
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl status netbird-relay --no-pager
+  elif command -v service >/dev/null 2>&1; then
+    service netbird-relay status
+  else
+    fail "未找到 systemd 或 OpenRC。"
+  fi
 }
 
 show_logs() {
-  ensure_ova_docker
-  require_compose_file
-  detect_compose
-  cd "$INSTALLER_DIR"
-  "${COMPOSE_CMD[@]}" -f docker-compose.yml logs -f --tail=120 caddy sync-relay-certs relay
+  if command -v journalctl >/dev/null 2>&1; then
+    journalctl -u netbird-relay -f -n 120
+  else
+    tail -f /var/log/netbird-relay.log /var/log/netbird-relay.err
+  fi
 }
 
-restart_services() {
-  ensure_ova_docker
-  require_compose_file
-  detect_compose
-  cd "$INSTALLER_DIR"
-  "${COMPOSE_CMD[@]}" -f docker-compose.yml restart
+restart_service() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl restart netbird-relay
+  elif command -v service >/dev/null 2>&1; then
+    service netbird-relay restart
+  else
+    fail "未找到 systemd 或 OpenRC。"
+  fi
 }
 
 load_env_file() {
-  require_installer_dir
-  if [[ -f "${INSTALLER_DIR}/.env" ]]; then
+  if [[ -f "$ENV_FILE" ]]; then
     set -a
-    # shellcheck disable=SC1091
-    . "${INSTALLER_DIR}/.env"
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
     set +a
   fi
 }
 
-find_caddy_cert() {
-  local domain="${1:-}"
-  if [[ -n "$domain" ]]; then
-    find "${INSTALLER_DIR}/data/caddy" -type f -path "*/${domain}/*.crt" 2>/dev/null | sort | head -n 1
-  else
-    find "${INSTALLER_DIR}/data/caddy" -type f -name "*.crt" 2>/dev/null | sort | head -n 1
-  fi
-}
-
-hash_file() {
-  local path="$1"
-  if [[ -f "$path" ]]; then
-    sha256sum "$path" | awk '{print $1}'
-  fi
-}
-
-print_compose_service_state() {
-  local service="$1"
-  local state="unknown"
-
-  if state="$("${COMPOSE_CMD[@]}" -f docker-compose.yml ps --status running --services "$service" 2>/dev/null | head -n 1)" && [[ "$state" == "$service" ]]; then
-    printf '%s\n' "running"
-  else
-    printf '%s\n' "not running"
-  fi
-}
-
 show_certificate_status() {
-  ensure_ova_docker
-  require_compose_file
-  detect_compose
   load_env_file
-  cd "$INSTALLER_DIR"
 
-  local relay_cert="${INSTALLER_DIR}/data/relay-certs/fullchain.pem"
-  local relay_key="${INSTALLER_DIR}/data/relay-certs/privkey.pem"
-  local caddy_cert
+  local relay_cert="${NB_TLS_CERT_FILE:-/etc/netbird-relay/certs/fullchain.pem}"
+  local relay_key="${NB_TLS_KEY_FILE:-/etc/netbird-relay/certs/privkey.pem}"
   local not_before="-"
   local not_after="-"
   local remaining_days="-"
   local expires_soon="未知"
-  local relay_synced="否"
-
-  caddy_cert="$(find_caddy_cert "${RELAY_DOMAIN:-}")"
 
   if [[ -s "$relay_cert" ]]; then
     not_before="$(openssl x509 -in "$relay_cert" -noout -startdate | cut -d= -f2-)"
@@ -164,29 +87,14 @@ show_certificate_status() {
     fi
   fi
 
-  if [[ -n "$caddy_cert" && -s "$relay_cert" && "$(hash_file "$caddy_cert")" == "$(hash_file "$relay_cert")" ]]; then
-    relay_synced="是"
-  fi
-
   cat <<EOF
 ==================== 证书状态 ====================
-Relay 域名：${RELAY_DOMAIN:-未配置}
 Relay 证书文件：${relay_cert}
 Relay 私钥文件：${relay_key}
-Caddy 源证书：${caddy_cert:-未找到}
 证书有效期开始：${not_before}
 证书有效期结束：${not_after}
 剩余天数：${remaining_days}
 30 天内是否过期：${expires_soon}
-
-==================== 同步状态 ====================
-Caddy 服务：$(print_compose_service_state caddy)
-sync-relay-certs 服务：$(print_compose_service_state sync-relay-certs)
-relay 服务：$(print_compose_service_state relay)
-Caddy 源证书：$(if [[ -n "$caddy_cert" ]]; then printf '已找到'; else printf '未找到'; fi)
-Relay 证书：$(if [[ -s "$relay_cert" ]]; then printf '已就绪'; else printf '未就绪'; fi)
-Relay 私钥：$(if [[ -s "$relay_key" ]]; then printf '已就绪'; else printf '未就绪'; fi)
-Relay 证书已同步：${relay_synced}
 EOF
 }
 
@@ -197,7 +105,7 @@ print_menu() {
               NetBird Relay 管理菜单
 =================================================
 1) 安装或重新配置 Relay
-2) 更新镜像并重启服务
+2) 更新二进制并重启服务
 3) 查看服务状态
 4) 查看服务日志
 5) 重启服务
@@ -213,10 +121,10 @@ while true; do
   IFS= read -r choice
   case "$choice" in
     1) run_install ;;
-    2) upgrade_images ;;
+    2) update_binary ;;
     3) show_status ;;
     4) show_logs ;;
-    5) restart_services ;;
+    5) restart_service ;;
     6) show_certificate_status ;;
     0) exit 0 ;;
     *) echo "无效选择：${choice}" ;;

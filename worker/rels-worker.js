@@ -1,16 +1,86 @@
-﻿const RELEASE_BASE = "https://github.com/kos991/net_relay/releases/latest/download";
+const RELEASE_BASE = "https://github.com/kos991/net_relay/releases/latest/download";
 
-const MAIN_SH_B64 = "IyEvdXNyL2Jpbi9lbnYgYmFzaApzZXQgLWV1byBwaXBlZmFpbAoKSU5TVEFMTF9VUkw9IiR7SU5TVEFMTF9VUkw6LWh0dHBzOi8vcmVscy5qaW5mZWkub3JnL2luc3RhbGwuc2h9IgoKdG1wX2ZpbGU9IiQobWt0ZW1wKSIKY2xlYW51cCgpIHsKICBybSAtZiAiJHRtcF9maWxlIgp9CnRyYXAgY2xlYW51cCBFWElUCgpkb3dubG9hZF9maWxlKCkgewogIGxvY2FsIHVybD0iJDEiCiAgbG9jYWwgb3V0cHV0PSIkMiIKCiAgZWNobyAi5q2j5Zyo5LiL6L295a6J6KOF5YWl5Y+j77yaJHt1cmx9IiA+JjIKICBpZiBjb21tYW5kIC12IGN1cmwgPi9kZXYvbnVsbCAyPiYxOyB0aGVuCiAgICBjdXJsIC1mTCAtLWNvbm5lY3QtdGltZW91dCAxMCAtLW1heC10aW1lIDEyMCAtLXJldHJ5IDIgLS1yZXRyeS1kZWxheSAyICIkdXJsIiAtbyAiJG91dHB1dCIKICBlbGlmIGNvbW1hbmQgLXYgd2dldCA+L2Rldi9udWxsIDI+JjE7IHRoZW4KICAgIHdnZXQgLS10aW1lb3V0PTEwIC0tdHJpZXM9MyAtTyAiJG91dHB1dCIgIiR1cmwiCiAgZWxzZQogICAgZWNobyAi6ZyA6KaB5a6J6KOFIGN1cmwg5oiWIHdnZXQg5ZCO5YaN5omn6KGM44CCIiA+JjIKICAgIGV4aXQgMQogIGZpCn0KCmRvd25sb2FkX2ZpbGUgIiRJTlNUQUxMX1VSTCIgIiR0bXBfZmlsZSIgfHwgewogIGVjaG8gIuS4i+i9veWksei0pe+8miR7SU5TVEFMTF9VUkx9IiA+JjIKICBlY2hvICLor7fmo4Dmn6Xlronoo4XlhaXlj6PmmK/lkKblj6/orr/pl67vvIzmiJbkuLTml7borr7nva4gSU5TVEFMTF9VUkwg5Li65Y+v6K6/6Zeu55qEIGluc3RhbGwuc2gg5Zyw5Z2A44CCIiA+JjIKICBleGl0IDEKfQoKYmFzaCAiJHRtcF9maWxlIgo=";
-const INSTALL_SH_B64 = "IyEvdXNyL2Jpbi9lbnYgYmFzaApzZXQgLWV1byBwaXBlZmFpbAoKUkVQT19VUkw9IiR7UkVQT19VUkw6LWh0dHBzOi8vZ2l0aHViLmNvbS9rb3M5OTEvbmV0X3JlbGF5LmdpdH0iCkFSQ0hJVkVfVVJMPSIke0FSQ0hJVkVfVVJMOi1odHRwczovL3JlbHMuamluZmVpLm9yZy9uZXRfcmVsYXktbWFpbi50YXIuZ3p9IgpBUkNISVZFX0ZBTExCQUNLX1VSTD0iJHtBUkNISVZFX0ZBTExCQUNLX1VSTDotaHR0cHM6Ly9naXRodWIuY29tL2tvczk5MS9uZXRfcmVsYXkvYXJjaGl2ZS9yZWZzL2hlYWRzL21haW4udGFyLmd6fSIKSU5TVEFMTF9ESVI9IiR7SU5TVEFMTF9ESVI6LS9vcHQvbmV0YmlyZC1yZWxheS1pbnN0YWxsZXJ9IgpCUkFOQ0g9IiR7QlJBTkNIOi1tYWlufSIKCkdSRUVOPSdcMDMzWzA7MzJtJwpSRUQ9J1wwMzNbMDszMW0nCllFTExPVz0nXDAzM1sxOzMzbScKTkM9J1wwMzNbMG0nCgpsb2coKSB7CiAgZWNobyAtZSAiJHtHUkVFTn0kKiR7TkN9Igp9Cgp3YXJuKCkgewogIGVjaG8gLWUgIiR7WUVMTE9XfSQqJHtOQ30iCn0KCmZhaWwoKSB7CiAgZWNobyAtZSAiJHtSRUR9JCoke05DfSIgPiYyCiAgZXhpdCAxCn0KCmRvd25sb2FkX2ZpbGUoKSB7CiAgbG9jYWwgdXJsPSIkMSIKICBsb2NhbCBvdXRwdXQ9IiQyIgogIGxvY2FsIGZhbGxiYWNrX3VybD0iJHszOi19IgoKICBsb2cgIuato+WcqOS4i+i9veWuieijheWZqO+8miR7dXJsfSIKICBpZiBjb21tYW5kIC12IGN1cmwgPi9kZXYvbnVsbCAyPiYxOyB0aGVuCiAgICBpZiBjdXJsIC1mTCAtLWNvbm5lY3QtdGltZW91dCAxMCAtLW1heC10aW1lIDE4MCAtLXJldHJ5IDIgLS1yZXRyeS1kZWxheSAyICIkdXJsIiAtbyAiJG91dHB1dCI7IHRoZW4KICAgICAgcmV0dXJuIDAKICAgIGZpCiAgZWxpZiBjb21tYW5kIC12IHdnZXQgPi9kZXYvbnVsbCAyPiYxOyB0aGVuCiAgICBpZiB3Z2V0IC0tdGltZW91dD0xMCAtLXRyaWVzPTMgLU8gIiRvdXRwdXQiICIkdXJsIjsgdGhlbgogICAgICByZXR1cm4gMAogICAgZmkKICBlbHNlCiAgICBmYWlsICLpnIDopoHlronoo4UgZ2l044CBY3VybCDmiJYgd2dldCDkuYvkuIDvvIznlKjkuo7kuIvovb3lronoo4XlmajjgIIiCiAgZmkKCiAgaWYgW1sgLW4gIiRmYWxsYmFja191cmwiIF1dOyB0aGVuCiAgICB3YXJuICLkuLvkuIvovb3lnLDlnYDlpLHotKXvvIzlsJ3or5UgR2l0SHViIOWkh+eUqO+8miR7ZmFsbGJhY2tfdXJsfSIKICAgIGlmIGNvbW1hbmQgLXYgY3VybCA+L2Rldi9udWxsIDI+JjE7IHRoZW4KICAgICAgY3VybCAtZkwgLS1jb25uZWN0LXRpbWVvdXQgMTAgLS1tYXgtdGltZSAxODAgLS1yZXRyeSAxIC0tcmV0cnktZGVsYXkgMiAiJGZhbGxiYWNrX3VybCIgLW8gIiRvdXRwdXQiCiAgICBlbHNlCiAgICAgIHdnZXQgLS10aW1lb3V0PTEwIC0tdHJpZXM9MiAtTyAiJG91dHB1dCIgIiRmYWxsYmFja191cmwiCiAgICBmaQogIGVsc2UKICAgIHJldHVybiAxCiAgZmkKfQoKc3luY19pbnN0YWxsZXJfZmlsZXMoKSB7CiAgbG9jYWwgc291cmNlX2Rpcj0iJDEiCgogIG1rZGlyIC1wICIkSU5TVEFMTF9ESVIiCiAgbG9nICLmraPlnKjlkIzmraXlronoo4Xlmajmlofku7bliLDvvJoke0lOU1RBTExfRElSfSIKICB3YXJuICLkv53nlZnnjrDmnInphY3nva7lkozmlbDmja7vvJouZW5244CBcmVsYXkuZW5244CBZG9ja2VyLWNvbXBvc2UueW1s44CBZGF0YS/jgIHor4HkuablkowgQ2FkZHlmaWxl44CCIgoKICB0YXIgLUMgIiRzb3VyY2VfZGlyIiBcCiAgICAtLWV4Y2x1ZGU9LmVudiBcCiAgICAtLWV4Y2x1ZGU9cmVsYXkuZW52IFwKICAgIC0tZXhjbHVkZT1kb2NrZXItY29tcG9zZS55bWwgXAogICAgLS1leGNsdWRlPWRhdGEgXAogICAgLS1leGNsdWRlPWNlcnRzIFwKICAgIC0tZXhjbHVkZT1jYWRkeS9DYWRkeWZpbGUgXAogICAgLS1leGNsdWRlPS5naXQgXAogICAgLWNmIC0gLiB8IHRhciAtQyAiJElOU1RBTExfRElSIiAteGYgLQp9CgpuZWVkX3Jvb3RfZm9yX2luc3RhbGxfZGlyKCkgewogIGlmIFtbICIke0VVSUR9IiAtbmUgMCAmJiAiJElOU1RBTExfRElSIiA9PSAvb3B0LyogXV07IHRoZW4KICAgIGZhaWwgIuivt+S9v+eUqCByb290IOaJp+ihjO+8jOaIlumAmui/hyBJTlNUQUxMX0RJUiDmjIflrprlvZPliY3nlKjmiLflj6/lhpnnm67lvZXjgIIiCiAgZmkKfQoKZG93bmxvYWRfd2l0aF90YXJiYWxsKCkgewogIGxvY2FsIHRtcF9kaXIKICB0bXBfZGlyPSIkKG1rdGVtcCAtZCkiCgogIGlmIGNvbW1hbmQgLXYgY3VybCA+L2Rldi9udWxsIDI+JjE7IHRoZW4KICAgIGRvd25sb2FkX2ZpbGUgIiRBUkNISVZFX1VSTCIgIiR0bXBfZGlyL3JlcG8udGFyLmd6IiAiJEFSQ0hJVkVfRkFMTEJBQ0tfVVJMIgogIGVsaWYgY29tbWFuZCAtdiB3Z2V0ID4vZGV2L251bGwgMj4mMTsgdGhlbgogICAgZG93bmxvYWRfZmlsZSAiJEFSQ0hJVkVfVVJMIiAiJHRtcF9kaXIvcmVwby50YXIuZ3oiICIkQVJDSElWRV9GQUxMQkFDS19VUkwiCiAgZWxzZQogICAgZmFpbCAi6ZyA6KaB5a6J6KOFIGdpdOOAgWN1cmwg5oiWIHdnZXQg5LmL5LiA77yM55So5LqO5LiL6L295a6J6KOF5Zmo44CCIgogIGZpCgogIHRhciAteHpmICIkdG1wX2Rpci9yZXBvLnRhci5neiIgLUMgIiR0bXBfZGlyIgogIHNob3B0IC1zIG51bGxnbG9iCiAgbG9jYWwgZXh0cmFjdGVkX2RpcnM9KCIkdG1wX2RpciIvbmV0X3JlbGF5LSopCiAgKCggJHsjZXh0cmFjdGVkX2RpcnNbQF19ID4gMCApKSB8fCBmYWlsICLlronoo4XljIXop6PljovlpLHotKXvvIzmnKrmib7liLAgbmV0X3JlbGF5LSog55uu5b2V44CCIgogIHN5bmNfaW5zdGFsbGVyX2ZpbGVzICIke2V4dHJhY3RlZF9kaXJzWzBdfSIKICBybSAtcmYgIiR0bXBfZGlyIgp9CgpzeW5jX3JlcG8oKSB7CiAgbWtkaXIgLXAgIiQoZGlybmFtZSAiJElOU1RBTExfRElSIikiCgogIGlmIGNvbW1hbmQgLXYgZ2l0ID4vZGV2L251bGwgMj4mMTsgdGhlbgogICAgd2FybiAi5qOA5rWL5YiwIGdpdO+8jOS9hum7mOiupOS9v+eUqCByZWxzLmppbmZlaS5vcmcg5a6J6KOF5YyF5Lul6YG/5YWNIEdpdEh1YiDnvZHnu5zkuI3nqLPlrprjgIIiCiAgZWxzZQogICAgd2FybiAi5pyq5qOA5rWL5YiwIGdpdO+8jOS9v+eUqOWOi+e8qeWMheS4i+i9veWuieijheWZqOOAgiIKICBmaQogIGRvd25sb2FkX3dpdGhfdGFyYmFsbAp9CgpuZWVkX3Jvb3RfZm9yX2luc3RhbGxfZGlyCnN5bmNfcmVwbwpjaG1vZCAreCAiJElOU1RBTExfRElSL3NldHVwLXJlbGF5LnNoIgoKbG9nICLmraPlnKjlkK/liqjlronoo4XlmajvvJoke0lOU1RBTExfRElSfSIKY2QgIiRJTlNUQUxMX0RJUiIKZXhlYyAuL3NldHVwLXJlbGF5LnNoCg==";
+const MAIN_SH = `#!/bin/sh
+set -eu
 
-function decodeBase64(value) {
-  const binary = atob(value);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
+INSTALL_URL="\${INSTALL_URL:-https://rels.jinfei.org/install.sh}"
+
+log() {
+  printf '%s\\n' "$*" >&2
 }
 
-const MAIN_SH = decodeBase64(MAIN_SH_B64);
-const INSTALL_SH = decodeBase64(INSTALL_SH_B64);
+fail() {
+  log "$*"
+  exit 1
+}
+
+run_as_root() {
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+  else
+    fail "需要 root 权限安装 bash/curl。请使用 root 运行，或先安装 sudo 并授权当前用户。"
+  fi
+}
+
+ensure_bootstrap_tools() {
+  if command -v bash >/dev/null 2>&1 && { command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; }; then
+    return 0
+  fi
+
+  if [ -r /etc/os-release ]; then
+    . /etc/os-release
+  fi
+
+  case " \${ID:-} \${ID_LIKE:-} " in
+    *" alpine "*)
+      run_as_root apk add --no-cache bash curl ca-certificates
+      ;;
+    *" debian "*|*" ubuntu "*)
+      run_as_root apt-get update
+      run_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y bash curl ca-certificates
+      ;;
+    *" rhel "*|*" fedora "*|*" rocky "*|*" almalinux "*|*" centos "*)
+      if command -v dnf >/dev/null 2>&1; then
+        run_as_root dnf install -y bash curl ca-certificates
+      else
+        run_as_root yum install -y bash curl ca-certificates
+      fi
+      ;;
+    *)
+      fail "无法自动安装 bash/curl。支持 Debian/Ubuntu/Rocky/Alma/Alpine。"
+      ;;
+  esac
+}
+
+download_file() {
+  url="$1"
+  output="$2"
+
+  log "正在下载安装入口：\${url}"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL --connect-timeout 10 --max-time 120 --retry 2 --retry-delay 2 "$url" -o "$output"
+  elif command -v wget >/dev/null 2>&1; then
+    wget --timeout=10 --tries=3 -O "$output" "$url"
+  else
+    fail "需要安装 curl 或 wget 后再执行。"
+  fi
+}
+
+ensure_bootstrap_tools
+
+tmp_file="$(mktemp)"
+trap 'rm -f "$tmp_file"' 0 HUP INT TERM
+
+download_file "$INSTALL_URL" "$tmp_file" || {
+  log "下载失败：\${INSTALL_URL}"
+  log "请检查安装入口是否可访问，或临时设置 INSTALL_URL 为可访问的 install.sh 地址。"
+  exit 1
+}
+
+bash "$tmp_file"
+`;
 
 function textResponse(body) {
   return new Response(body, {
@@ -50,7 +120,7 @@ export default {
       return textResponse(MAIN_SH);
     }
     if (url.pathname === "/install.sh") {
-      return textResponse(INSTALL_SH);
+      return proxyAsset("install.sh");
     }
     if (url.pathname === "/net_relay-main.tar.gz") {
       return proxyAsset("net_relay-main.tar.gz");
@@ -65,4 +135,3 @@ export default {
     });
   },
 };
-

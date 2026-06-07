@@ -1,0 +1,22 @@
+#!/sbin/openrc-run
+
+name="NetBird Relay"
+description="NetBird Relay"
+command=/usr/local/bin/netbird-relay
+command_background=true
+pidfile=/run/netbird-relay.pid
+output_log=/var/log/netbird-relay.log
+error_log=/var/log/netbird-relay.err
+
+depend() {
+  need net
+  after firewall
+}
+
+start_pre() {
+  checkpath --directory --mode 0755 /run
+  checkpath --directory --mode 0755 /var/log
+  if [ -f /etc/netbird-relay/relay.env ]; then
+    export $(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' /etc/netbird-relay/relay.env | xargs)
+  fi
+}

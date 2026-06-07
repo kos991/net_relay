@@ -10,10 +10,10 @@ on:
         description: "Release tag, empty means next v1.0.N"
         required: false
         default: ""
-      relay_image:
-        description: "Relay image to use in OVA"
+      netbird_relay_ref:
+        description: "NetBird upstream ref/tag/branch to build relay from"
         required: false
-        default: "crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay"
+        default: "main"
 
 permissions:
   contents: write
@@ -26,11 +26,10 @@ jobs:
       OVA_NAME: net-relay-alpine-x86_64.ova
       QCOW2_NAME: net-relay-alpine-x86_64.qcow2.gz
       INSTALLER_ARCHIVE_NAME: net_relay-main.tar.gz
+      RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
+      RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       SYSTEM_DISK_GB: 3
-      DEFAULT_IMAGE_REPOSITORY: crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels
-      RELAY_IMAGE: ${{ github.event.inputs.relay_image || 'crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay' }}
-      CADDY_IMAGE: crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:caddy
-      SYNC_IMAGE: crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:sync
+      NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || 'main' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,10 +39,23 @@ jobs:
       - name: Check OVA scripts
         run: bash tests/ova-scripts-check.sh
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+
       - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y qemu-utils libguestfs-tools
+
+      - name: Build official NetBird relay binaries
+        run: |
+          mkdir -p dist release
+          TARGET_OS=linux TARGET_ARCH=amd64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash relay/build-relay.sh
+          TARGET_OS=linux TARGET_ARCH=arm64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash relay/build-relay.sh
+          TARGET_OS=linux TARGET_ARCH=amd64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash relay/package-relay.sh
+          TARGET_OS=linux TARGET_ARCH=arm64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash relay/package-relay.sh
 
       - name: Generate release metadata
         id: meta
@@ -79,33 +91,12 @@ jobs:
             echo "update_note=$(git log -1 --pretty=%s)"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Fetch Alpine packages for offline install
-        run: |
-          mkdir -p ova-build/apks
-          docker run --rm -v "$PWD/ova-build/apks:/out" alpine:3.23 sh -c '
-            set -e
-            sed -i "/community/s/^#//" /etc/apk/repositories
-            apk update
-            apk fetch --recursive --output /out \
-              bash wget curl git vim nano unzip zip rsync \
-              docker docker-openrc docker-cli-compose \
-              ca-certificates openssl openssh \
-              cloud-init cloud-init-openrc cloud-init-datasource-aliyun \
-              qemu-guest-agent \
-              net-tools iproute2 iputils iputils-tracepath \
-              bind-tools busybox-extras lsof || {
-              echo "Failed to fetch required packages."
-              apk search cloud-init
-              apk search qemu-guest-agent
-              exit 1
-            }
-            ls -lh /out | head -20
-          '
-
       - name: Prepare installer payload
         run: |
           mkdir -p ova-build/netbird-relay-installer
-          cp -a caddy sync setup-relay.sh install.sh main.sh README.md .gitignore .gitattributes ova-build/netbird-relay-installer/
+          cp -a relay setup-relay.sh install.sh main.sh README.md .gitignore .gitattributes ova-build/netbird-relay-installer/
+          mkdir -p ova-build/relay-package
+          tar -xzf "release/${RELAY_AMD64_PACKAGE}" -C ova-build/relay-package
 
       - name: Download Alpine cloud image
         run: |
@@ -123,12 +114,11 @@ jobs:
           SSH_PORT: ${{ steps.meta.outputs.ssh_port }}
         run: |
           set +e
-          sudo -E virt-customize --no-network --format qcow2 -a ova-build/alpine.qcow2 \
+          sudo -E virt-customize --format qcow2 -a ova-build/alpine.qcow2 \
             --root-password "password:${ROOT_PASSWORD}" \
             --run-command "sed -i '/community/s/^#//' /etc/apk/repositories" \
-            --copy-in ova-build/apks:/tmp \
-            --run-command "apk add --allow-untrusted /tmp/apks/*.apk" \
-            --run-command "rm -rf /tmp/apks /var/cache/apk/*" \
+            --run-command "apk update" \
+            --run-command "apk add --no-cache bash wget curl git vim nano unzip zip rsync ca-certificates openssl openssh cloud-init cloud-init-openrc cloud-init-datasource-aliyun qemu-guest-agent net-tools iproute2 iputils iputils-tracepath bind-tools busybox-extras lsof" \
             --run-command "mkdir -p /etc/cloud/cloud.cfg.d && printf '%s\n' 'datasource_list: [ AliYun, Ec2, NoCloud, None ]' > /etc/cloud/cloud.cfg.d/99_net_relay_datasource.cfg" \
             --copy-in ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --run-command "if [ -f /etc/init.d/cloud-init-local ]; then rc-update add cloud-init-local boot; fi" \
@@ -136,11 +126,12 @@ jobs:
             --run-command "if [ -f /etc/init.d/cloud-config ]; then rc-update add cloud-config default; fi" \
             --run-command "if [ -f /etc/init.d/cloud-final ]; then rc-update add cloud-final default; fi" \
             --run-command "if [ -f /etc/init.d/sysctl ]; then rc-update add sysctl boot; fi" \
-            --run-command "rc-update add docker default" \
             --run-command "if [ -f /etc/init.d/qemu-guest-agent ]; then rc-update add qemu-guest-agent default; fi" \
             --run-command "rc-update add sshd default" \
             --mkdir /usr/local/sbin \
             --mkdir /etc/sysctl.d \
+            --copy-in ova-build/relay-package/netbird-relay/bin/netbird-relay:/usr/local/bin \
+            --copy-in ova-build/relay-package/netbird-relay/services/netbird-relay.openrc:/etc/init.d \
             --copy-in ova-build/netbird-relay-installer:/opt \
             --copy-in ova/files/rels:/usr/local/sbin \
             --copy-in ova/files/net-relay-firstboot:/usr/local/sbin \
@@ -149,15 +140,13 @@ jobs:
             --copy-in ova/files/root-profile:/root \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
-            --run-command "sed -i 's#__RELAY_IMAGE__#${RELAY_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
-            --run-command "sed -i 's#__CADDY_IMAGE__#${CADDY_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
-            --run-command "sed -i 's#__SYNC_IMAGE__#${SYNC_IMAGE}#' /usr/local/sbin/net-relay-firstboot" \
             --run-command "passwd -u root || true" \
             --run-command "chage -d 0 root || passwd -e root || true" \
             --run-command "ssh-keygen -A" \
             --run-command "sshd -t" \
             --run-command "printf 'sshd effective config: '; grep -E '^(Port|PermitRootLogin|PasswordAuthentication|PubkeyAuthentication) ' /etc/ssh/sshd_config" \
             --run-command "chmod +x /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /opt/netbird-relay-installer/setup-relay.sh" \
+            --run-command "chmod +x /usr/local/bin/netbird-relay /etc/init.d/netbird-relay.openrc && mv /etc/init.d/netbird-relay.openrc /etc/init.d/netbird-relay" \
             --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile" 2>&1 | tee ova-build/virt-customize.log
           status="${PIPESTATUS[0]}"
           if [ "$status" -ne 0 ]; then
@@ -257,7 +246,7 @@ jobs:
           git archive --format=tar.gz --prefix=net_relay-main/ HEAD -o "release/${INSTALLER_ARCHIVE_NAME}"
           cp install.sh release/install.sh
 
-          (cd release && sha256sum "$OVA_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" install.sh > SHA256SUMS)
+          (cd release && sha256sum "$OVA_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" install.sh > SHA256SUMS)
 
       - name: Write release notes
         run: |
@@ -265,8 +254,11 @@ jobs:
           # NetBird Relay ${{ steps.meta.outputs.release_tag }}
 
           \`\`\`bash
-          bash <(curl -sSL https://rels.jinfei.org)
+          curl -sSL https://rels.jinfei.org | sh
           \`\`\`
+
+          NetBird Relay upstream ref:
+          - ${NETBIRD_RELAY_REF}
 
           OVA 登录：
           - 用户名：root
@@ -292,5 +284,7 @@ jobs:
             "release/${OVA_NAME}" \
             "release/${QCOW2_NAME}" \
             "release/${INSTALLER_ARCHIVE_NAME}" \
+            "release/${RELAY_AMD64_PACKAGE}" \
+            "release/${RELAY_ARM64_PACKAGE}" \
             "release/install.sh" \
             release/SHA256SUMS

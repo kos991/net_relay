@@ -5,7 +5,14 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIRSTBOOT="${ROOT_DIR}/ova/files/net-relay-firstboot"
 RELS="${ROOT_DIR}/ova/files/rels"
 SETUP="${ROOT_DIR}/setup-relay.sh"
+INSTALL="${ROOT_DIR}/install.sh"
+MAIN="${ROOT_DIR}/main.sh"
 ROOT_PROFILE="${ROOT_DIR}/ova/files/root-profile"
+WORKER="${ROOT_DIR}/worker/rels-worker.js"
+BUILD_RELAY="${ROOT_DIR}/relay/build-relay.sh"
+PACKAGE_RELAY="${ROOT_DIR}/relay/package-relay.sh"
+SYSTEMD_SERVICE="${ROOT_DIR}/relay/netbird-relay.service"
+OPENRC_SERVICE="${ROOT_DIR}/relay/netbird-relay.openrc"
 LOGIN_CFG="${ROOT_DIR}/ova/files/99-net-relay-login.cfg"
 BUILD_OVA="${ROOT_DIR}/.github/workflows/build-ova.yml"
 SYSCTL_CONF="${ROOT_DIR}/ova/files/99-net-relay-sysctl.conf"
@@ -13,20 +20,24 @@ SYSCTL_CONF="${ROOT_DIR}/ova/files/99-net-relay-sysctl.conf"
 bash -n "$FIRSTBOOT"
 bash -n "$RELS"
 bash -n "$SETUP"
+bash -n "$INSTALL"
+bash -n "$BUILD_RELAY"
+bash -n "$PACKAGE_RELAY"
+sh -n "$MAIN"
 bash -n "$ROOT_PROFILE"
 
 grep -q "NetBird Relay OVA 初始化引导" "$FIRSTBOOT"
 grep -q "正在执行 OVA 启动自检" "$FIRSTBOOT"
 grep -q "自检完成" "$FIRSTBOOT"
 grep -q "multi-node relay group" "$FIRSTBOOT"
+grep -q "netbird-relay 二进制" "$FIRSTBOOT"
 grep -q "NetBird Relay 管理菜单" "$RELS"
 grep -q "安装或重新配置 Relay" "$RELS"
-grep -q "更新镜像并重启服务" "$RELS"
+grep -q "更新二进制并重启服务" "$RELS"
 grep -q "查看证书状态" "$RELS"
 grep -q "show_certificate_status" "$RELS"
 grep -q "证书有效期结束" "$RELS"
 grep -q "剩余天数" "$RELS"
-grep -q "同步状态" "$RELS"
 grep -q "openssl x509" "$RELS"
 grep -q "NetBird Relay 安装向导" "$SETUP"
 grep -q "Relay 域名" "$SETUP"
@@ -38,14 +49,9 @@ grep -q "join" "$SETUP"
 grep -q "read_relay_auth_secret" "$SETUP"
 grep -Fq 'if [[ "$RELAY_GROUP_MODE" == "join" && -z "$RELAY_AUTH_SECRET" ]]' "$SETUP"
 grep -q "must provide an existing relay auth secret" "$SETUP"
-grep -q "RELAY_NODE_NAME=" "$SETUP"
-grep -q "RELAY_NODE_NAME=\${RELAY_NODE_NAME}" "$SETUP"
 grep -q "安装完成" "$SETUP"
-grep -q "如果有多个 Relay 节点" "$SETUP"
 grep -q "mode_label" "$SETUP"
 grep -q "relays.addresses" "$SETUP"
-grep -q "same secret" "$SETUP"
-grep -q "RELAY_NODE_NAME" "$SETUP"
 grep -q "root-password-confirmed" "$ROOT_PROFILE"
 grep -q "ROOT_PASSWORD_CONFIRM_FLAG" "$ROOT_PROFILE"
 grep -q "yes" "$ROOT_PROFILE"
@@ -56,6 +62,45 @@ grep -q "net.ipv4.tcp_congestion_control = bbr" "$SYSCTL_CONF"
 grep -q "net.core.rmem_max = 8388608" "$SYSCTL_CONF"
 grep -q "net.ipv4.tcp_keepalive_time = 120" "$SYSCTL_CONF"
 grep -q "net.ipv4.ip_local_port_range = 10000 65535" "$SYSCTL_CONF"
+grep -q "detect_os" "$INSTALL"
+grep -q "detect_arch" "$INSTALL"
+grep -q "download_relay_package" "$INSTALL"
+grep -q "verify_sha256" "$INSTALL"
+grep -q "install_relay_binary" "$INSTALL"
+grep -q "restart_service" "$SETUP"
+grep -q "netbird-relay-linux-\${arch}.tar.gz" "$INSTALL"
+grep -q "VERSION_CODENAME" "$INSTALL"
+grep -q "ID_LIKE" "$INSTALL"
+grep -q "apt-get install" "$INSTALL"
+grep -q 'pkg_manager="dnf"' "$INSTALL"
+grep -q "apk add" "$INSTALL"
+grep -q "systemctl enable --now netbird-relay" "$SETUP"
+grep -q "rc-update add netbird-relay default" "$SETUP"
+grep -q "NETBIRD_RELAY_REF" "$BUILD_RELAY"
+grep -q "https://github.com/netbirdio/netbird.git" "$BUILD_RELAY"
+grep -q "go build" "$BUILD_RELAY"
+grep -q "./relay" "$BUILD_RELAY"
+grep -q "netbird-relay-linux-" "$PACKAGE_RELAY"
+grep -q "netbird-relay" "$SYSTEMD_SERVICE"
+grep -q "command=/usr/local/bin/netbird-relay" "$OPENRC_SERVICE"
+grep -q '#!/bin/sh' "$MAIN"
+grep -q "ensure_bootstrap_tools" "$MAIN"
+grep -q "apk add --no-cache bash curl ca-certificates" "$MAIN"
+grep -q "curl -sSL https://rels.jinfei.org | sh" "${ROOT_DIR}/README.md"
+grep -q 'proxyAsset("install.sh")' "$WORKER"
+grep -q "MAIN_SH =" "$WORKER"
+grep -q "netbird-relay-linux-amd64.tar.gz" "$BUILD_OVA"
+grep -q "netbird-relay-linux-arm64.tar.gz" "$BUILD_OVA"
+
+if grep -Eq "install_docker|docker-compose-plugin|docker-cli-compose|docker compose|docker-compose|netbirdio/relay" "$INSTALL" "$SETUP"; then
+  echo "Binary installer must not install or require Docker." >&2
+  exit 1
+fi
+
+if grep -Eqi "docker|compose|Caddy 源证书|sync-relay-certs" "$FIRSTBOOT" "$RELS" "$SETUP" "$INSTALL"; then
+  echo "Binary installer and OVA scripts must not contain Docker/Compose runtime text." >&2
+  exit 1
+fi
 
 if grep -Eq "default_qdisc = cake|tc qdisc|tcp_retries2|nf_conntrack_udp_timeout|wg-quick|systemctl restart xray" "$SYSCTL_CONF" "$FIRSTBOOT" "$RELS" "$SETUP"; then
   echo "OVA scripts must not contain high-risk network tuning commands." >&2
@@ -66,15 +111,3 @@ if grep -qi "VMware" "$FIRSTBOOT" "$RELS" "$SETUP"; then
   echo "OVA scripts must not contain VMware-specific text." >&2
   exit 1
 fi
-
-prefix_file="$(mktemp)"
-trap 'rm -f "$prefix_file"' EXIT
-awk '/^if \[\[ -f "\$FLAG" \]\]/{exit} {print}' "$FIRSTBOOT" > "$prefix_file"
-cat >> "$prefix_file" <<'EOF'
-printf '%s\n%s\n%s\n' "$RELAY_IMAGE" "$CADDY_IMAGE" "$SYNC_IMAGE"
-EOF
-
-output="$(env -u RELAY_IMAGE -u CADDY_IMAGE -u SYNC_IMAGE bash "$prefix_file")"
-grep -q "netrels/netrels:relay" <<<"$output"
-grep -q "netrels/netrels:caddy" <<<"$output"
-grep -q "netrels/netrels:sync" <<<"$output"
