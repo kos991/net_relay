@@ -3,6 +3,7 @@
 name="NetBird Relay"
 description="NetBird Relay"
 command=/usr/local/bin/netbird-relay
+command_user="netbird-relay:netbird-relay"
 command_background=true
 pidfile=/run/netbird-relay.pid
 output_log=/var/log/netbird-relay.log
@@ -16,7 +17,15 @@ depend() {
 start_pre() {
   checkpath --directory --mode 0755 /run
   checkpath --directory --mode 0755 /var/log
+  checkpath --file --owner netbird-relay:netbird-relay --mode 0640 "$output_log"
+  checkpath --file --owner netbird-relay:netbird-relay --mode 0640 "$error_log"
   if [ -f /etc/netbird-relay/relay.env ]; then
-    export $(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' /etc/netbird-relay/relay.env | xargs)
+    while IFS='=' read -r key value; do
+      case "$key" in
+        NB_LOG_LEVEL|NB_LOG_FILE|NB_LISTEN_ADDRESS|NB_EXPOSED_ADDRESS|NB_AUTH_SECRET|NB_ENABLE_STUN|NB_STUN_PORTS|NB_TLS_CERT_FILE|NB_TLS_KEY_FILE)
+          export "$key=$value"
+          ;;
+      esac
+    done < /etc/netbird-relay/relay.env
   fi
 }

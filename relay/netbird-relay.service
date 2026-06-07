@@ -10,10 +10,14 @@ EnvironmentFile=/etc/netbird-relay/relay.env
 ExecStart=/usr/local/bin/netbird-relay
 Restart=always
 RestartSec=5
-DynamicUser=no
-User=root
-Group=root
-LimitNOFILE=1048576
+User=netbird-relay
+Group=netbird-relay
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/netbird-relay /var/log
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target

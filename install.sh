@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RELEASE_BASE="${RELEASE_BASE:-https://github.com/kos991/net_relay/releases/latest/download}"
+DEFAULT_RELEASE_BASE="https://github.com/kos991/net_relay/releases/latest/download"
+RELEASE_BASE="${RELEASE_BASE:-$DEFAULT_RELEASE_BASE}"
+ALLOW_CUSTOM_RELEASE_BASE="${ALLOW_CUSTOM_RELEASE_BASE:-0}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/netbird-relay-installer}"
 BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/netbird-relay}"
@@ -60,6 +62,22 @@ detect_install_mode() {
     ""|binary|compose) ;;
     *) fail "INSTALL_MODE 只能是 binary 或 compose。" ;;
   esac
+}
+
+validate_release_base() {
+  case "$RELEASE_BASE" in
+    https://github.com/kos991/net_relay/releases/latest/download|https://github.com/kos991/net_relay/releases/download/*)
+      return 0
+      ;;
+    https://*)
+      if [[ "$ALLOW_CUSTOM_RELEASE_BASE" == "1" ]]; then
+        warn "正在使用自定义 RELEASE_BASE，请确认来源可信：${RELEASE_BASE}"
+        return 0
+      fi
+      ;;
+  esac
+
+  fail "RELEASE_BASE 必须是受信任的 HTTPS 地址。如确需自定义，请设置 ALLOW_CUSTOM_RELEASE_BASE=1。"
 }
 
 select_install_mode() {
@@ -226,9 +244,13 @@ download_file() {
 
   log "正在下载：${url}"
   if command -v curl >/dev/null 2>&1; then
-    curl -fL --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 "$url" -o "$output"
+    curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 "$url" -o "$output"
   elif command -v wget >/dev/null 2>&1; then
-    wget --timeout=10 --tries=3 -O "$output" "$url"
+    if wget --help 2>&1 | grep -q -- '--https-only'; then
+      wget --https-only --timeout=10 --tries=3 -O "$output" "$url"
+    else
+      wget --timeout=10 --tries=3 -O "$output" "$url"
+    fi
   else
     fail "需要安装 curl 或 wget。"
   fi
@@ -241,12 +263,25 @@ verify_sha256() {
   package_name="$(basename "$package_file")"
 
   if command -v sha256sum >/dev/null 2>&1; then
-    (cd "$(dirname "$package_file")" && grep " ${package_name}$" "$sums_file" | sha256sum -c -)
+    (cd "$(dirname "$package_file")" && awk -v n="$package_name" '$2==n{print; found=1} END{exit !found}' "$sums_file" | sha256sum -c -)
   elif command -v shasum >/dev/null 2>&1; then
-    (cd "$(dirname "$package_file")" && grep " ${package_name}$" "$sums_file" | shasum -a 256 -c -)
+    (cd "$(dirname "$package_file")" && awk -v n="$package_name" '$2==n{print; found=1} END{exit !found}' "$sums_file" | shasum -a 256 -c -)
   else
     warn "未找到 sha256sum/shasum，跳过 SHA256 校验。"
   fi
+}
+
+verify_tar_paths() {
+  local package_file="$1"
+  local entry
+
+  while IFS= read -r entry; do
+    case "$entry" in
+      ""|/*|../*|*/../*|*"/.."|*"/../"*|*":"*)
+        fail "安装包包含不安全路径：${entry}"
+        ;;
+    esac
+  done < <(tar -tzf "$package_file")
 }
 
 download_relay_package() {
@@ -267,6 +302,7 @@ install_relay_binary() {
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "$tmp_dir"' RETURN
 
+  verify_tar_paths "$package_file"
   tar -xzf "$package_file" -C "$tmp_dir"
   [[ -x "${tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "安装包缺少 netbird-relay 二进制。"
 
@@ -286,6 +322,7 @@ install_installer_files() {
 
 main() {
   detect_install_mode "$@"
+  validate_release_base
   detect_os
   install_base_dependencies
   ensure_scheduler

@@ -22,6 +22,7 @@ LOGIN_CFG="${ROOT_DIR}/ova/files/99-net-relay-login.cfg"
 BUILD_OVA="${ROOT_DIR}/.github/workflows/build-ova.yml"
 SYNC_OFFICIAL="${ROOT_DIR}/.github/workflows/sync-official-relay.yml"
 SYSCTL_CONF="${ROOT_DIR}/ova/files/99-net-relay-sysctl.conf"
+SSHD_CONFIG="${ROOT_DIR}/ova/files/sshd_config"
 
 bash -n "$FIRSTBOOT"
 bash -n "$RELS"
@@ -71,6 +72,8 @@ grep -q "relays.addresses" "$SETUP"
 grep -q "restart_service" "$SETUP"
 grep -q "systemctl enable --now netbird-relay" "$SETUP"
 grep -q "rc-update add netbird-relay default" "$SETUP"
+grep -q "ensure_service_user" "$SETUP"
+grep -q "mask_secret" "$SETUP"
 grep -q "DEPLOY_MODE" "$SETUP"
 grep -q "write_compose_file" "$SETUP"
 grep -q "docker compose -f" "$SETUP"
@@ -105,6 +108,8 @@ grep -q "netbird-relay-linux-amd64.tar.gz" "$BUILD_OVA"
 grep -q "netbird-relay-linux-arm64.tar.gz" "$BUILD_OVA"
 
 grep -q "growpart" "$ROOT_RESIZE"
+grep -q "apt_run" "$ROOT_RESIZE"
+grep -q "flock /var/lib/dpkg/lock-frontend" "$ROOT_RESIZE"
 grep -q "resize2fs" "$ROOT_RESIZE"
 grep -q "xfs_growfs" "$ROOT_RESIZE"
 
@@ -120,6 +125,8 @@ grep -q "udhcpc" "$NETWORK_CHECK"
 grep -q "ip route" "$NETWORK_CHECK"
 
 grep -q "zram-init" "$ZRAM_SETUP"
+grep -q "apt_run" "$ZRAM_SETUP"
+grep -q "flock /var/lib/dpkg/lock-frontend" "$ZRAM_SETUP"
 grep -q "zram-optimize.sh" "$ZRAM_SETUP"
 grep -q "vm.swappiness=100" "$ZRAM_SETUP"
 grep -q "vm.page-cluster=0" "$ZRAM_SETUP"
@@ -167,16 +174,55 @@ grep -q "go build" "$BUILD_RELAY"
 grep -q "./relay" "$BUILD_RELAY"
 grep -q "netbird-relay-linux-" "$PACKAGE_RELAY"
 grep -q "netbird-relay" "$SYSTEMD_SERVICE"
+grep -q "User=netbird-relay" "$SYSTEMD_SERVICE"
+grep -q "Group=netbird-relay" "$SYSTEMD_SERVICE"
+grep -q "NoNewPrivileges=true" "$SYSTEMD_SERVICE"
+grep -q "ProtectSystem=strict" "$SYSTEMD_SERVICE"
 grep -q "command=/usr/local/bin/netbird-relay" "$OPENRC_SERVICE"
+grep -q "command_user=\"netbird-relay:netbird-relay\"" "$OPENRC_SERVICE"
 grep -q '#!/bin/sh' "$MAIN"
 grep -q "ensure_bootstrap_tools" "$MAIN"
 grep -q "apk add --no-cache bash curl ca-certificates" "$MAIN"
+grep -q "validate_install_url" "$MAIN"
+grep -q "verify_install_sha256" "$MAIN"
+grep -q "actual_hash" "$MAIN"
+grep -q "SHA256SUMS" "$MAIN"
 grep -q "curl -sSL https://rels.jinfei.org | sh" "${ROOT_DIR}/README.md"
 grep -q "镜像不内置 Docker/Compose" "${ROOT_DIR}/README.md"
 grep -q "GPL-3.0" "${ROOT_DIR}/README.md"
 grep -q "GNU GENERAL PUBLIC LICENSE" "${ROOT_DIR}/LICENSE"
 grep -q 'proxyAsset("install.sh")' "$WORKER"
 grep -q "MAIN_SH =" "$WORKER"
+
+grep -q "PubkeyAuthentication yes" "$SSHD_CONFIG"
+grep -q "UsePAM yes" "$SSHD_CONFIG"
+grep -q "MaxAuthTries 3" "$SSHD_CONFIG"
+
+grep -q "validate_release_base" "$INSTALL"
+grep -q "verify_tar_paths" "$INSTALL"
+grep -q -- "--proto '=https'" "$INSTALL"
+grep -q -- "--https-only" "$INSTALL"
+grep -q "awk -v n=" "$INSTALL"
+
+if grep -q "Relay 认证 secret：\${RELAY_AUTH_SECRET}" "$SETUP"; then
+  echo "setup summary must not print relay auth secret in plaintext." >&2
+  exit 1
+fi
+
+if grep -Eq "curl[[:space:]]+https://get\\.acme\\.sh[[:space:]]*\\|[[:space:]]*sh|export[[:space:]]+CF_Token=" "$SETUP"; then
+  echo "setup must not pipe acme.sh installer into sh or export CF_Token globally." >&2
+  exit 1
+fi
+
+if grep -Eq 'User=root|Group=root|DynamicUser=no' "$SYSTEMD_SERVICE"; then
+  echo "systemd service must not run netbird-relay as root." >&2
+  exit 1
+fi
+
+if grep -Fq 'export $(grep' "$OPENRC_SERVICE"; then
+  echo "OpenRC service must not load env files with export grep/xargs." >&2
+  exit 1
+fi
 
 grep -q "name: sync-official-relay" "$SYNC_OFFICIAL"
 grep -q "schedule:" "$SYNC_OFFICIAL"

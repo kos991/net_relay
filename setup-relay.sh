@@ -8,6 +8,8 @@ BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
 DEPLOY_MODE="${DEPLOY_MODE:-binary}"
 COMPOSE_FILE="${COMPOSE_FILE:-${CONFIG_DIR}/docker-compose.yml}"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-${CONFIG_DIR}/compose.env}"
+SERVICE_USER="${SERVICE_USER:-netbird-relay}"
+SERVICE_GROUP="${SERVICE_GROUP:-netbird-relay}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -134,6 +136,56 @@ generate_secret() {
   fi
 }
 
+mask_secret() {
+  local secret="$1"
+  if [[ "${#secret}" -le 8 ]]; then
+    printf '********'
+    return 0
+  fi
+  printf '%s...%s' "${secret:0:4}" "${secret: -4}"
+}
+
+ensure_service_user() {
+  if [[ "$DEPLOY_MODE" != "binary" ]]; then
+    return 0
+  fi
+
+  if ! getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
+    if command -v groupadd >/dev/null 2>&1; then
+      run_as_root groupadd --system "$SERVICE_GROUP"
+    elif command -v addgroup >/dev/null 2>&1; then
+      run_as_root addgroup -S "$SERVICE_GROUP"
+    else
+      fail "无法创建服务组：${SERVICE_GROUP}"
+    fi
+  fi
+
+  if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+    if command -v useradd >/dev/null 2>&1; then
+      run_as_root useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --gid "$SERVICE_GROUP" "$SERVICE_USER"
+    elif command -v adduser >/dev/null 2>&1; then
+      run_as_root adduser -S -D -H -h /nonexistent -s /sbin/nologin -G "$SERVICE_GROUP" "$SERVICE_USER"
+    else
+      fail "无法创建服务用户：${SERVICE_USER}"
+    fi
+  fi
+}
+
+protect_binary_runtime_files() {
+  if [[ "$DEPLOY_MODE" != "binary" ]]; then
+    return 0
+  fi
+
+  run_as_root chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "$CONFIG_DIR"
+  run_as_root chmod 0750 "$CONFIG_DIR"
+  if [[ -d "$CERT_DIR" ]]; then
+    run_as_root chmod 0750 "$CERT_DIR"
+    [[ -f "$TLS_CERT_FILE" ]] && run_as_root chmod 0640 "$TLS_CERT_FILE"
+    [[ -f "$TLS_KEY_FILE" ]] && run_as_root chmod 0640 "$TLS_KEY_FILE"
+  fi
+  [[ -f "$ENV_FILE" ]] && run_as_root chmod 0640 "$ENV_FILE"
+}
+
 ensure_cron_service() {
   if command -v systemctl >/dev/null 2>&1; then
     run_as_root systemctl enable --now cron >/dev/null 2>&1 || \
@@ -155,13 +207,17 @@ service_reload_command() {
 }
 
 ensure_acme_sh() {
+  local installer
   if [[ -x "${HOME}/.acme.sh/acme.sh" ]]; then
     printf '%s' "${HOME}/.acme.sh/acme.sh"
     return 0
   fi
 
   log "正在安装 acme.sh..."
-  curl https://get.acme.sh | sh -s email="${ACME_EMAIL}"
+  installer="$(mktemp)"
+  trap 'rm -f "$installer"' RETURN
+  curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 --retry 2 --retry-delay 2 https://get.acme.sh -o "$installer"
+  sh "$installer" email="${ACME_EMAIL}"
   [[ -x "${HOME}/.acme.sh/acme.sh" ]] || fail "acme.sh installation failed."
   printf '%s' "${HOME}/.acme.sh/acme.sh"
 }
@@ -181,9 +237,8 @@ issue_cloudflare_certificate() {
   acme="$(ensure_acme_sh)"
   reloadcmd="$(service_reload_command)"
 
-  export CF_Token="$CF_API_TOKEN"
   "$acme" --set-default-ca --server letsencrypt
-  "$acme" --issue --dns dns_cf -d "$domain" --keylength ec-256
+  env CF_Token="$CF_API_TOKEN" "$acme" --issue --dns dns_cf -d "$domain" --keylength ec-256
   "$acme" --install-cert -d "$domain" --ecc \
     --fullchain-file "$cert_file" \
     --key-file "$key_file" \
@@ -334,9 +389,11 @@ print_header() {
 
 print_summary() {
   local mode_label="create a new relay node group"
+  local relay_secret_hint
   if [[ "$RELAY_GROUP_MODE" == "join" ]]; then
     mode_label="join an existing relay node group"
   fi
+  relay_secret_hint="$(mask_secret "$RELAY_AUTH_SECRET")"
 
   cat <<EOF
 
@@ -348,7 +405,7 @@ Relay 环境文件：${ENV_FILE}
 Compose 配置：${COMPOSE_FILE}
 Relay 地址：rels://${RELAY_DOMAIN}:${RELAY_PORT}
 STUN 地址：stun:${RELAY_DOMAIN}:${STUN_PORT}
-Relay 认证 secret：${RELAY_AUTH_SECRET}
+Relay 认证 secret：${relay_secret_hint}（完整值已写入 ${ENV_FILE}）
 TLS 证书：${TLS_CERT_FILE}
 TLS 私钥：${TLS_KEY_FILE}
 证书模式：${CERT_MODE}
@@ -359,7 +416,7 @@ server:
   relays:
     addresses:
       - "rels://${RELAY_DOMAIN}:${RELAY_PORT}"
-    secret: "${RELAY_AUTH_SECRET}"
+    secret: "<请从 ${ENV_FILE} 读取 NB_AUTH_SECRET>"
   stuns:
     - uri: "stun:${RELAY_DOMAIN}:${STUN_PORT}"
       proto: udp
@@ -412,12 +469,14 @@ if [[ -z "$RELAY_AUTH_SECRET" ]]; then
   log "已自动生成 Relay 认证 secret。请保存它，所有节点和 Management 必须使用同一个值。"
 fi
 
+ensure_service_user
 ensure_certificate "$RELAY_DOMAIN" "$TLS_CERT_FILE" "$TLS_KEY_FILE"
 if [[ "$DEPLOY_MODE" == "compose" ]]; then
   write_compose_file
   restart_compose_service
 else
   write_env_file
+  protect_binary_runtime_files
   restart_service
 fi
 print_summary

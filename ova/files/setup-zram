@@ -5,6 +5,14 @@ log() {
   echo "zram: $*"
 }
 
+apt_run() {
+  if command -v flock >/dev/null 2>&1; then
+    flock /var/lib/dpkg/lock-frontend apt-get "$@"
+  else
+    apt-get "$@"
+  fi
+}
+
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "错误: 请以 root 权限运行" >&2
   exit 1
@@ -48,8 +56,8 @@ EOF
   rc-update add zram-init default
   rc-service zram-init restart || true
 else
-  apt-get update
-  apt-get install -y util-linux cron
+  apt_run update
+  apt_run install -y util-linux cron
   cat > /usr/local/bin/zram-start.sh <<EOF
 #!/usr/bin/env bash
 set -e
