@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+log() {
+  echo "network-check: $*"
+}
+
+if [[ "$(id -u)" -ne 0 ]]; then
+  echo "error: please run as root" >&2
+  exit 1
+fi
+
+MODULES=(
+  virtio_net
+  e1000
+  e1000e
+  vmxnet3
+  xen_netfront
+  ena
+  hv_netvsc
+  gve
+)
+
+persist_modules() {
+  mkdir -p /etc/modules-load.d
+  printf '%s\n' "${MODULES[@]}" > /etc/modules-load.d/net-relay-network.conf
+
+  touch /etc/modules
+  for module in "${MODULES[@]}"; do
+    grep -qxF "$module" /etc/modules || echo "$module" >> /etc/modules
+  done
+}
+
+load_modules() {
+  local module
+  for module in "${MODULES[@]}"; do
+    modprobe "$module" 2>/dev/null || true
+  done
+}
+
+detect_interfaces() {
+  ip -o link show 2>/dev/null \
+    | awk -F': ' '$2 != "lo" {print $2}' \
+    | cut -d@ -f1
+}
+
+try_dhcp() {
+  local iface="$1"
+  ip link set "$iface" up 2>/dev/null || true
+
+  if command -v udhcpc >/dev/null 2>&1; then
+    udhcpc -q -n -i "$iface" -t 3 -T 3 >/dev/null 2>&1 || true
+  elif command -v dhclient >/dev/null 2>&1; then
+    dhclient -1 "$iface" >/dev/null 2>&1 || true
+  fi
+}
+
+persist_modules
+load_modules
+
+if ! command -v ip >/dev/null 2>&1; then
+  log "skip DHCP check: ip command is unavailable"
+  exit 0
+fi
+
+mapfile -t interfaces < <(detect_interfaces)
+if [[ "${#interfaces[@]}" -eq 0 ]]; then
+  log "warning: no non-loopback network interface detected"
+  exit 0
+fi
+
+if ip route | grep -q '^default '; then
+  log "default route already present"
+  ip -br addr || true
+  exit 0
+fi
+
+for iface in "${interfaces[@]}"; do
+  log "requesting DHCP lease on ${iface}"
+  try_dhcp "$iface"
+  if ip route | grep -q '^default '; then
+    log "default route acquired on ${iface}"
+    ip -br addr || true
+    exit 0
+  fi
+done
+
+log "warning: DHCP did not provide a default route"
+ip -br addr || true
+ip route || true

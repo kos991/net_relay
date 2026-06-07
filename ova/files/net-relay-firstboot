@@ -4,36 +4,40 @@ set -euo pipefail
 FLAG="/var/lib/net-relay/firstboot.done"
 INSTALLER_DIR="/opt/netbird-relay-installer"
 BIN_PATH="/usr/local/bin/netbird-relay"
+ROOT_RESIZE="/usr/local/sbin/setup-root-resize"
+NETWORK_CHECK="/usr/local/sbin/setup-network-check"
 ZRAM_SETUP="/usr/local/sbin/setup-zram"
 KERNEL_TUNING="/usr/local/sbin/setup-kernel-tuning"
 
 fail() {
-  echo "错误：$*" >&2
+  echo "error: $*" >&2
   exit 1
 }
 
 check_cmd() {
-  command -v "$1" >/dev/null 2>&1 || fail "缺少必要命令：$1"
+  command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
 }
 
 check_disk_space() {
   local available_mb
   available_mb="$(df -Pm / | awk 'NR == 2 {print $4}')"
-  [[ "$available_mb" =~ ^[0-9]+$ ]] || fail "无法检查 / 的剩余磁盘空间。"
-  (( available_mb >= 256 )) || fail "/ 至少需要 256 MB 可用空间，当前仅 ${available_mb} MB。"
+  [[ "$available_mb" =~ ^[0-9]+$ ]] || fail "unable to check free space on /"
+  (( available_mb >= 256 )) || fail "/ needs at least 256 MB free, current ${available_mb} MB"
 }
 
 run_preflight_checks() {
-  echo "正在执行 OVA 启动自检..."
-  [[ -d "$INSTALLER_DIR" ]] || fail "安装器目录不存在：${INSTALLER_DIR}"
-  [[ -x "$BIN_PATH" ]] || fail "netbird-relay 二进制不存在：${BIN_PATH}"
-  [[ -x "$ZRAM_SETUP" ]] || fail "ZRAM 初始化脚本不存在：${ZRAM_SETUP}"
-  [[ -x "$KERNEL_TUNING" ]] || fail "内核优化脚本不存在：${KERNEL_TUNING}"
+  echo "Running OVA boot preflight checks..."
+  [[ -d "$INSTALLER_DIR" ]] || fail "installer directory missing: ${INSTALLER_DIR}"
+  [[ -x "$BIN_PATH" ]] || fail "netbird-relay binary missing: ${BIN_PATH}"
+  [[ -x "$ROOT_RESIZE" ]] || fail "root resize script missing: ${ROOT_RESIZE}"
+  [[ -x "$NETWORK_CHECK" ]] || fail "network check script missing: ${NETWORK_CHECK}"
+  [[ -x "$ZRAM_SETUP" ]] || fail "zram setup script missing: ${ZRAM_SETUP}"
+  [[ -x "$KERNEL_TUNING" ]] || fail "kernel tuning script missing: ${KERNEL_TUNING}"
   check_cmd bash
   check_cmd curl
   check_cmd openssl
   check_disk_space
-  echo "自检完成。"
+  echo "Preflight checks completed."
 }
 
 if [[ -f "$FLAG" ]]; then
@@ -43,24 +47,26 @@ fi
 clear || true
 cat <<'EOF'
 =================================================
-          NetBird Relay OVA 初始化引导
+          NetBird Relay OVA firstboot
 =================================================
 
-默认登录信息：
-- 用户名：root
-- SSH 端口：__SSH_PORT__
+Default login:
+- User: root
+- SSH port: __SSH_PORT__
 
-使用说明：
-- 首次登录会自动检查 netbird-relay 二进制、磁盘空间和必要命令。
-- 完成首次配置后，可随时执行 rels 打开管理菜单。
-- 支持创建新的 Relay 节点组或加入已有节点组（multi-node relay group），多节点必须复用同一个 secret。
-
+Notes:
+- First login forces a root password change.
+- Firstboot checks the relay binary, disk space, network, ZRAM, and kernel tuning.
+- Run "rels" later to open the management menu.
+- Multi-node relay groups are supported; all nodes in a group must reuse the same secret.
 =================================================
 EOF
 
 run_preflight_checks
-"$ZRAM_SETUP" || echo "警告：ZRAM 初始化失败，继续 Relay 配置。"
-"$KERNEL_TUNING" || echo "警告：内核优化应用失败，继续 Relay 配置。"
+"$ROOT_RESIZE" || echo "warning: root resize failed, continuing Relay setup."
+"$NETWORK_CHECK" || echo "warning: network self-check failed, continuing Relay setup."
+"$ZRAM_SETUP" || echo "warning: ZRAM setup failed, continuing Relay setup."
+"$KERNEL_TUNING" || echo "warning: kernel tuning failed, continuing Relay setup."
 
 cd "$INSTALLER_DIR"
 bash ./setup-relay.sh

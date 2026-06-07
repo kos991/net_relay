@@ -1,0 +1,34 @@
+name: validate
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate GitHub token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth status
+          gh api "repos/${GITHUB_REPOSITORY}" --jq .full_name
+
+      - name: Check workflow YAML
+        run: |
+          ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].each { |f| YAML.load_file(f); puts "parsed #{f}" }'
+
+      - name: Check OVA and installer scripts
+        run: bash tests/ova-scripts-check.sh
+
+      - name: Check whitespace
+        run: git diff --check
