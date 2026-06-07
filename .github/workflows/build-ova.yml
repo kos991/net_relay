@@ -99,29 +99,6 @@ jobs:
           tar -xzf "release/${RELAY_AMD64_PACKAGE}" -C ova-build/relay-package
           git archive --format=tar.gz --prefix=net_relay-main/ HEAD -o "release/${INSTALLER_ARCHIVE_NAME}"
           cp install.sh release/install.sh
-          {
-            echo "SSH_PORT=${{ steps.meta.outputs.ssh_port }}"
-            echo "SSH_COMMAND=ssh -p ${{ steps.meta.outputs.ssh_port }} root@<OVA_IP>"
-          } > release/OVA_SSH_PORT.txt
-          cat > release/OVA_ACCESS.md <<EOF
-          # OVA access information
-
-          Initial login:
-          - User: root
-          - Initial password: ${{ steps.meta.outputs.root_password }}
-          - SSH port: ${{ steps.meta.outputs.ssh_port }}
-          - Login command: ssh -p ${{ steps.meta.outputs.ssh_port }} root@<OVA_IP>
-          - First login will force a root password change before initialization continues.
-
-          Default service ports:
-          - Relay TCP: 8443
-          - STUN UDP: 3478
-
-          Open these inbound ports on the VM network/security group:
-          - TCP ${{ steps.meta.outputs.ssh_port }} for SSH management.
-          - TCP 8443 for NetBird Relay, unless changed during firstboot setup.
-          - UDP 3478 for STUN, unless changed during firstboot setup.
-          EOF
 
       - name: Download Alpine cloud image
         run: |
@@ -208,7 +185,7 @@ jobs:
           tar -C release -cf "release/${OVA_NAME}" net-relay-alpine-x86_64.ovf net-relay-alpine-x86_64.vmdk
           qemu-img convert -p -O qcow2 -c ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.qcow2
           gzip -9 release/net-relay-alpine-x86_64.qcow2
-          (cd release && sha256sum "$OVA_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" install.sh OVA_SSH_PORT.txt OVA_ACCESS.md > SHA256SUMS)
+          (cd release && sha256sum "$OVA_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" install.sh > SHA256SUMS)
 
       - name: Write release notes
         run: |
@@ -226,12 +203,6 @@ jobs:
           - SSH port: ${{ steps.meta.outputs.ssh_port }}
           - Login command: \`ssh -p ${{ steps.meta.outputs.ssh_port }} root@<OVA_IP>\`
           - First login will force a root password change before initialization continues.
-
-          ## OVA ports
-
-          - Relay TCP: 8443
-          - STUN UDP: 3478
-          - Open TCP ${{ steps.meta.outputs.ssh_port }}, TCP 8443, and UDP 3478 on the VM network/security group.
 
           NetBird Relay upstream ref:
           - ${NETBIRD_RELAY_REF}
@@ -258,6 +229,4 @@ jobs:
             "release/${RELAY_AMD64_PACKAGE}" \
             "release/${RELAY_ARM64_PACKAGE}" \
             "release/install.sh" \
-            release/OVA_SSH_PORT.txt \
-            release/OVA_ACCESS.md \
             release/SHA256SUMS

@@ -76,11 +76,8 @@ grep -q "OVA_NAME" "$BUILD_OVA"
 grep -q "QCOW2_NAME" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.ova" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.qcow2.gz" "$BUILD_OVA"
-grep -q "OVA_SSH_PORT.txt" "$BUILD_OVA"
-grep -q "OVA_ACCESS.md" "$BUILD_OVA"
+grep -q "SSH port:" "$BUILD_OVA"
 grep -q "ssh -p" "$BUILD_OVA"
-grep -q "Relay TCP: 8443" "$BUILD_OVA"
-grep -q "STUN UDP: 3478" "$BUILD_OVA"
 grep -q "setup-zram" "$BUILD_OVA"
 grep -q "setup-kernel-tuning" "$BUILD_OVA"
 grep -q "zram-init" "$ZRAM_SETUP"
@@ -150,5 +147,10 @@ fi
 
 if grep -qi "VMware" "$FIRSTBOOT" "$RELS" "$SETUP"; then
   echo "OVA scripts must not contain VMware-specific text." >&2
+  exit 1
+fi
+
+if grep -Eq "OVA_SSH_PORT\\.txt|OVA_ACCESS\\.md|## OVA ports" "$BUILD_OVA"; then
+  echo "OVA SSH port must be published in release notes only, without extra access assets." >&2
   exit 1
 fi
