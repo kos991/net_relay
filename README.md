@@ -13,3 +13,7 @@ curl -sSL https://rels.jinfei.org | sh
 - SSH 端口写在 Release notes。
 - 首启执行根分区扩容、DHCP 自检、ZRAM 和内核参数优化。
 - 暂不支持 LXC/OpenVZ。
+
+## 许可证
+
+GPL-3.0，详见 [LICENSE](LICENSE)。
