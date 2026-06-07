@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SYSCTL_CONF="/etc/sysctl.d/99-net-relay-sysctl.conf"
+
+log() {
+  echo "kernel-tuning: $*"
+}
+
+if [[ "$(id -u)" -ne 0 ]]; then
+  echo "错误: 请以 root 权限运行" >&2
+  exit 1
+fi
+
+if [[ ! -f "$SYSCTL_CONF" ]]; then
+  echo "错误: 未找到 ${SYSCTL_CONF}" >&2
+  exit 1
+fi
+
+modprobe tcp_bbr 2>/dev/null || true
+modprobe sch_fq 2>/dev/null || true
+
+if command -v sysctl >/dev/null 2>&1; then
+  sysctl --system || true
+fi
+
+log "qdisc=$(sysctl -n net.core.default_qdisc 2>/dev/null || printf unknown)"
+log "congestion=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || printf unknown)"
+log "swappiness=$(sysctl -n vm.swappiness 2>/dev/null || printf unknown)"
+log "page-cluster=$(sysctl -n vm.page-cluster 2>/dev/null || printf unknown)"

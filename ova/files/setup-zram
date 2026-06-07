@@ -81,11 +81,11 @@ EOF
 fi
 
 sysctl -w vm.swappiness=100 || true
-sysctl -w vm.page-cluster=4 || true
+sysctl -w vm.page-cluster=0 || true
 sed -i '/vm.swappiness/d;/vm.page-cluster/d' /etc/sysctl.conf
 {
   echo "vm.swappiness=100"
-  echo "vm.page-cluster=4"
+  echo "vm.page-cluster=0"
 } >> /etc/sysctl.conf
 
 cat > /usr/local/bin/zram-optimize.sh <<'EOF'

@@ -5,6 +5,7 @@ FLAG="/var/lib/net-relay/firstboot.done"
 INSTALLER_DIR="/opt/netbird-relay-installer"
 BIN_PATH="/usr/local/bin/netbird-relay"
 ZRAM_SETUP="/usr/local/sbin/setup-zram"
+KERNEL_TUNING="/usr/local/sbin/setup-kernel-tuning"
 
 fail() {
   echo "错误：$*" >&2
@@ -27,6 +28,7 @@ run_preflight_checks() {
   [[ -d "$INSTALLER_DIR" ]] || fail "安装器目录不存在：${INSTALLER_DIR}"
   [[ -x "$BIN_PATH" ]] || fail "netbird-relay 二进制不存在：${BIN_PATH}"
   [[ -x "$ZRAM_SETUP" ]] || fail "ZRAM 初始化脚本不存在：${ZRAM_SETUP}"
+  [[ -x "$KERNEL_TUNING" ]] || fail "内核优化脚本不存在：${KERNEL_TUNING}"
   check_cmd bash
   check_cmd curl
   check_cmd openssl
@@ -58,6 +60,7 @@ EOF
 
 run_preflight_checks
 "$ZRAM_SETUP" || echo "警告：ZRAM 初始化失败，继续 Relay 配置。"
+"$KERNEL_TUNING" || echo "警告：内核优化应用失败，继续 Relay 配置。"
 
 cd "$INSTALLER_DIR"
 bash ./setup-relay.sh
