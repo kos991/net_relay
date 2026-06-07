@@ -5,7 +5,7 @@ RELEASE_BASE="${RELEASE_BASE:-https://github.com/kos991/net_relay/releases/lates
 INSTALL_DIR="${INSTALL_DIR:-/opt/netbird-relay-installer}"
 BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/netbird-relay}"
-INSTALL_MODE="${INSTALL_MODE:-binary}"
+INSTALL_MODE="${INSTALL_MODE:-}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -57,9 +57,45 @@ detect_install_mode() {
   done
 
   case "$INSTALL_MODE" in
-    binary|compose) ;;
+    ""|binary|compose) ;;
     *) fail "INSTALL_MODE must be binary or compose." ;;
   esac
+}
+
+select_install_mode() {
+  local value=""
+
+  if [[ -n "$INSTALL_MODE" ]]; then
+    return 0
+  fi
+
+  while true; do
+    cat >&2 <<'EOF'
+Choose install mode:
+  1. Official binary (recommended, no Docker)
+  2. Docker Compose
+EOF
+    printf '%s' 'Select install mode [1]: ' >&2
+    if [[ -r /dev/tty ]]; then
+      IFS= read -r value </dev/tty || fail "Unable to read install mode."
+    else
+      IFS= read -r value || fail "Unable to read install mode. Set INSTALL_MODE=binary or INSTALL_MODE=compose for non-interactive installs."
+    fi
+
+    case "$value" in
+      ""|1)
+        INSTALL_MODE="binary"
+        return 0
+        ;;
+      2)
+        INSTALL_MODE="compose"
+        return 0
+        ;;
+      *)
+        warn "Please enter 1 or 2."
+        ;;
+    esac
+  done
 }
 
 detect_os() {
@@ -254,6 +290,7 @@ main() {
   install_base_dependencies
   ensure_scheduler
   install_installer_files
+  select_install_mode
 
   if [[ "$INSTALL_MODE" == "compose" ]]; then
     install_compose_dependencies
