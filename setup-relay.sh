@@ -136,14 +136,107 @@ generate_secret() {
   fi
 }
 
+ensure_cron_service() {
+  if command -v systemctl >/dev/null 2>&1; then
+    run_as_root systemctl enable --now cron >/dev/null 2>&1 || \
+      run_as_root systemctl enable --now crond >/dev/null 2>&1 || true
+  elif command -v rc-update >/dev/null 2>&1; then
+    run_as_root rc-update add crond default >/dev/null 2>&1 || true
+    run_as_root service crond start >/dev/null 2>&1 || true
+  fi
+}
+
+service_reload_command() {
+  if command -v systemctl >/dev/null 2>&1; then
+    printf 'systemctl restart netbird-relay'
+  else
+    printf 'service netbird-relay restart'
+  fi
+}
+
+ensure_acme_sh() {
+  if [[ -x "${HOME}/.acme.sh/acme.sh" ]]; then
+    printf '%s' "${HOME}/.acme.sh/acme.sh"
+    return 0
+  fi
+
+  log "正在安装 acme.sh。"
+  curl https://get.acme.sh | sh -s email="${ACME_EMAIL}"
+  [[ -x "${HOME}/.acme.sh/acme.sh" ]] || fail "acme.sh 安装失败。"
+  printf '%s' "${HOME}/.acme.sh/acme.sh"
+}
+
+issue_cloudflare_certificate() {
+  local domain="$1"
+  local cert_file="$2"
+  local key_file="$3"
+  local acme
+  local reloadcmd
+
+  [[ -n "${ACME_EMAIL:-}" ]] || fail "ACME Email 不能为空。"
+  [[ -n "${CF_API_TOKEN:-}" ]] || fail "Cloudflare API Token 不能为空。"
+
+  run_as_root mkdir -p "$(dirname "$cert_file")"
+  ensure_cron_service
+  acme="$(ensure_acme_sh)"
+  reloadcmd="$(service_reload_command)"
+
+  export CF_Token="$CF_API_TOKEN"
+  "$acme" --set-default-ca --server letsencrypt
+  "$acme" --issue --dns dns_cf -d "$domain" --keylength ec-256
+  "$acme" --install-cert -d "$domain" --ecc \
+    --fullchain-file "$cert_file" \
+    --key-file "$key_file" \
+    --reloadcmd "$reloadcmd"
+}
+
+select_certificate_mode() {
+  local value=""
+
+  while true; do
+    cat >&2 <<'EOF'
+TLS 证书模式：
+  1. Cloudflare DNS 自动签发和续期（推荐）
+  2. 使用已有证书路径
+  3. 生成本地自签证书
+EOF
+    value="$(read_input '请选择证书模式 [1]: ')"
+    if [[ -z "$value" || "$value" == "1" ]]; then
+      printf 'cloudflare'
+      return 0
+    fi
+    if [[ "$value" == "2" ]]; then
+      printf 'existing'
+      return 0
+    fi
+    if [[ "$value" == "3" ]]; then
+      printf 'selfsigned'
+      return 0
+    fi
+    warn "请输入 1、2 或 3。"
+  done
+}
+
 ensure_certificate() {
   local domain="$1"
   local cert_file="$2"
   local key_file="$3"
 
-  if [[ -s "$cert_file" && -s "$key_file" ]]; then
-    return 0
-  fi
+  case "$CERT_MODE" in
+    cloudflare)
+      issue_cloudflare_certificate "$domain" "$cert_file" "$key_file"
+      return 0
+      ;;
+    existing)
+      [[ -s "$cert_file" && -s "$key_file" ]] || fail "已有证书路径无效：${cert_file} / ${key_file}"
+      return 0
+      ;;
+    selfsigned)
+      if [[ -s "$cert_file" && -s "$key_file" ]]; then
+        return 0
+      fi
+      ;;
+  esac
 
   warn "未找到 TLS 证书，自动生成本地自签证书：${cert_file}"
   run_as_root mkdir -p "$(dirname "$cert_file")"
@@ -194,6 +287,7 @@ print_header() {
   echo -e "${GREEN}              官方源码编译二进制版               ${NC}"
   echo -e "${GREEN}=================================================${NC}"
   echo "说明：如需多 Relay 节点，请在每台节点输入同一个认证密钥。"
+  echo "证书默认使用 acme.sh + Cloudflare DNS 自动签发，并通过 reloadcmd 自动续期同步。"
   echo
 }
 
@@ -214,6 +308,8 @@ STUN 地址： stun:${RELAY_DOMAIN}:${STUN_PORT}
 认证密钥：  ${RELAY_AUTH_SECRET}
 TLS 证书：  ${TLS_CERT_FILE}
 TLS 私钥：  ${TLS_KEY_FILE}
+证书模式：  ${CERT_MODE}
+证书自动续期：Cloudflare 模式由 acme.sh cron 任务续期，并通过 reloadcmd 重启 netbird-relay。
 
 把下面配置合并到 NetBird Management 的 config.yaml：
 server:
@@ -244,8 +340,13 @@ RELAY_GROUP_MODE="$(select_relay_group_mode)"
 RELAY_DOMAIN="$(prompt_nonempty 'Relay 域名，例如 rels.example.com：')"
 RELAY_PORT="$(prompt_default 'Relay TCP 端口 [8443]：' '8443')"
 STUN_PORT="$(prompt_default 'STUN UDP 端口 [3478]：' '3478')"
+CERT_MODE="$(select_certificate_mode)"
 TLS_CERT_FILE="$(prompt_default "TLS 证书路径 [${CERT_DIR}/fullchain.pem]：" "${CERT_DIR}/fullchain.pem")"
 TLS_KEY_FILE="$(prompt_default "TLS 私钥路径 [${CERT_DIR}/privkey.pem]：" "${CERT_DIR}/privkey.pem")"
+if [[ "$CERT_MODE" == "cloudflare" ]]; then
+  ACME_EMAIL="$(prompt_nonempty '证书申请邮箱 ACME Email：')"
+  CF_API_TOKEN="$(read_secret 'Cloudflare API Token（输入不显示）：')"
+fi
 RELAY_AUTH_SECRET="$(read_relay_auth_secret)"
 
 validate_port "$RELAY_PORT" || fail "Relay 端口无效：${RELAY_PORT}"

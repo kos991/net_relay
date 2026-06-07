@@ -87,6 +87,7 @@ install_base_dependencies() {
       run_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
         bash \
         ca-certificates \
+        cron \
         curl \
         openssl \
         tar
@@ -97,6 +98,7 @@ install_base_dependencies() {
       run_as_root "$pkg_manager" install -y \
         bash \
         ca-certificates \
+        cronie \
         curl \
         openssl \
         tar
@@ -105,11 +107,22 @@ install_base_dependencies() {
       run_as_root apk add --no-cache \
         bash \
         ca-certificates \
+        cronie \
         curl \
         openssl \
         tar
       ;;
   esac
+}
+
+ensure_scheduler() {
+  if command -v systemctl >/dev/null 2>&1; then
+    run_as_root systemctl enable --now cron >/dev/null 2>&1 || \
+      run_as_root systemctl enable --now crond >/dev/null 2>&1 || true
+  elif command -v rc-update >/dev/null 2>&1; then
+    run_as_root rc-update add crond default >/dev/null 2>&1 || true
+    run_as_root service crond start >/dev/null 2>&1 || true
+  fi
 }
 
 download_file() {
@@ -179,6 +192,7 @@ install_installer_files() {
 main() {
   detect_os
   install_base_dependencies
+  ensure_scheduler
 
   local arch package_file tmp_dir
   arch="$(detect_arch)"
