@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+log() {
+  echo "zram: $*"
+}
+
+if [[ "$(id -u)" -ne 0 ]]; then
+  echo "错误: 请以 root 权限运行" >&2
+  exit 1
+fi
+
+if [[ -f /etc/alpine-release ]]; then
+  OS="alpine"
+elif [[ -f /etc/debian_version ]]; then
+  OS="debian"
+else
+  echo "错误: 暂不支持此系统" >&2
+  exit 1
+fi
+
+TOTAL_MEM="$(free -m | awk '/^Mem:/ {print $2}')"
+[[ "$TOTAL_MEM" =~ ^[0-9]+$ ]] || TOTAL_MEM=512
+ZRAM_SIZE="${TOTAL_MEM}M"
+
+modprobe zram 2>/dev/null || true
+BEST_ALGO="lzo"
+if [[ -f /sys/block/zram0/comp_algorithm ]]; then
+  ALGOS="$(cat /sys/block/zram0/comp_algorithm)"
+  for algo in zstd lz4 lzo-rle; do
+    if echo "$ALGOS" | grep -q "$algo"; then
+      BEST_ALGO="$algo"
+      break
+    fi
+  done
+fi
+
+log "size=${ZRAM_SIZE}, algorithm=${BEST_ALGO}"
+
+if [[ "$OS" == "alpine" ]]; then
+  apk add --no-cache zram-init util-linux bash cronie >/dev/null 2>&1 || true
+  cat > /etc/conf.d/zram-init <<EOF
+num_devices=1
+type0=swap
+algo0=${BEST_ALGO}
+size0=${TOTAL_MEM}
+EOF
+  rc-update add zram-init default
+  rc-service zram-init restart || true
+else
+  apt-get update
+  apt-get install -y util-linux cron
+  cat > /usr/local/bin/zram-start.sh <<EOF
+#!/usr/bin/env bash
+set -e
+modprobe zram 2>/dev/null || true
+swapoff /dev/zram0 2>/dev/null || true
+echo 1 > /sys/block/zram0/reset 2>/dev/null || true
+echo ${BEST_ALGO} > /sys/block/zram0/comp_algorithm
+echo ${ZRAM_SIZE} > /sys/block/zram0/disksize
+mkswap /dev/zram0
+swapon -p 100 /dev/zram0
+EOF
+  chmod +x /usr/local/bin/zram-start.sh
+  cat > /etc/systemd/system/zram.service <<'EOF'
+[Unit]
+Description=ZRAM Optimized Swap
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/zram-start.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable zram
+  systemctl restart zram || true
+fi
+
+sysctl -w vm.swappiness=100 || true
+sysctl -w vm.page-cluster=4 || true
+sed -i '/vm.swappiness/d;/vm.page-cluster/d' /etc/sysctl.conf
+{
+  echo "vm.swappiness=100"
+  echo "vm.page-cluster=4"
+} >> /etc/sysctl.conf
+
+cat > /usr/local/bin/zram-optimize.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ -f /sys/block/zram0/compact ]]; then
+  echo 1 > /sys/block/zram0/compact
+  echo "[$(date)] ZRAM compact completed"
+fi
+EOF
+chmod +x /usr/local/bin/zram-optimize.sh
+
+if [[ "$OS" == "alpine" ]]; then
+  mkdir -p /var/spool/cron/crontabs
+  if ! crontab -l 2>/dev/null | grep -q "zram-optimize"; then
+    (crontab -l 2>/dev/null; echo "0 3 * * * /usr/local/bin/zram-optimize.sh") | crontab -
+  fi
+  rc-service crond start 2>/dev/null || true
+  rc-update add crond default 2>/dev/null || true
+else
+  (crontab -l 2>/dev/null | grep -v "zram-optimize"; echo "0 3 * * * /usr/local/bin/zram-optimize.sh") | crontab -
+  systemctl enable --now cron >/dev/null 2>&1 || true
+fi
+
+/usr/local/bin/zram-optimize.sh || true
+zramctl || true

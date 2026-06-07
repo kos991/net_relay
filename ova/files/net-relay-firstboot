@@ -4,6 +4,7 @@ set -euo pipefail
 FLAG="/var/lib/net-relay/firstboot.done"
 INSTALLER_DIR="/opt/netbird-relay-installer"
 BIN_PATH="/usr/local/bin/netbird-relay"
+ZRAM_SETUP="/usr/local/sbin/setup-zram"
 
 fail() {
   echo "错误：$*" >&2
@@ -25,6 +26,7 @@ run_preflight_checks() {
   echo "正在执行 OVA 启动自检..."
   [[ -d "$INSTALLER_DIR" ]] || fail "安装器目录不存在：${INSTALLER_DIR}"
   [[ -x "$BIN_PATH" ]] || fail "netbird-relay 二进制不存在：${BIN_PATH}"
+  [[ -x "$ZRAM_SETUP" ]] || fail "ZRAM 初始化脚本不存在：${ZRAM_SETUP}"
   check_cmd bash
   check_cmd curl
   check_cmd openssl
@@ -55,6 +57,7 @@ cat <<'EOF'
 EOF
 
 run_preflight_checks
+"$ZRAM_SETUP" || echo "警告：ZRAM 初始化失败，继续 Relay 配置。"
 
 cd "$INSTALLER_DIR"
 bash ./setup-relay.sh
