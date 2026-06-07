@@ -36,7 +36,7 @@ run_as_root() {
   elif command -v sudo >/dev/null 2>&1; then
     sudo "$@"
   else
-    fail "Root permission is required. Run as root or install/configure sudo first."
+    fail "需要 root 权限。请使用 root 运行，或先安装并配置 sudo。"
   fi
 }
 
@@ -50,7 +50,7 @@ detect_install_mode() {
         INSTALL_MODE="compose"
         ;;
       *)
-        fail "Unknown option: $1"
+        fail "未知参数：$1"
         ;;
     esac
     shift
@@ -58,7 +58,7 @@ detect_install_mode() {
 
   case "$INSTALL_MODE" in
     ""|binary|compose) ;;
-    *) fail "INSTALL_MODE must be binary or compose." ;;
+    *) fail "INSTALL_MODE 只能是 binary 或 compose。" ;;
   esac
 }
 
@@ -71,15 +71,15 @@ select_install_mode() {
 
   while true; do
     cat >&2 <<'EOF'
-Choose install mode:
-  1. Official binary (recommended, no Docker)
+请选择安装模式：
+  1. 官方二进制安装（推荐，不安装 Docker）
   2. Docker Compose
 EOF
-    printf '%s' 'Select install mode [1]: ' >&2
+    printf '%s' '请选择安装模式 [1]: ' >&2
     if [[ -r /dev/tty ]]; then
-      IFS= read -r value </dev/tty || fail "Unable to read install mode."
+      IFS= read -r value </dev/tty || fail "无法读取安装模式。"
     else
-      IFS= read -r value || fail "Unable to read install mode. Set INSTALL_MODE=binary or INSTALL_MODE=compose for non-interactive installs."
+      IFS= read -r value || fail "无法读取安装模式。非交互安装请设置 INSTALL_MODE=binary 或 INSTALL_MODE=compose。"
     fi
 
     case "$value" in
@@ -92,14 +92,14 @@ EOF
         return 0
         ;;
       *)
-        warn "Please enter 1 or 2."
+        warn "请输入 1 或 2。"
         ;;
     esac
   done
 }
 
 detect_os() {
-  [[ -r /etc/os-release ]] || fail "Cannot detect OS: missing /etc/os-release. Supported: Debian/Ubuntu/Rocky/Alma/Alpine."
+  [[ -r /etc/os-release ]] || fail "无法识别系统：缺少 /etc/os-release。支持 Debian/Ubuntu/Rocky/Alma/Alpine。"
 
   # shellcheck disable=SC1091
   . /etc/os-release
@@ -118,7 +118,7 @@ detect_os() {
       OS_FAMILY="alpine"
       ;;
     *)
-      fail "Unsupported OS: ${PRETTY_NAME:-${OS_ID}}. Supported: Debian/Ubuntu/Rocky/Alma/Alpine."
+      fail "不支持的系统：${PRETTY_NAME:-${OS_ID}}。当前支持 Debian/Ubuntu/Rocky/Alma/Alpine。"
       ;;
   esac
 }
@@ -134,7 +134,7 @@ detect_arch() {
       printf 'arm64'
       ;;
     *)
-      fail "Unsupported CPU architecture: ${machine}. Supported: amd64/arm64."
+      fail "不支持的 CPU 架构：${machine}。当前支持 amd64/arm64。"
       ;;
   esac
 }
@@ -207,7 +207,7 @@ install_compose_dependencies() {
     run_as_root service docker start
   fi
 
-  docker compose version >/dev/null 2>&1 || fail "Docker Compose is unavailable after installation."
+  docker compose version >/dev/null 2>&1 || fail "Docker Compose 安装后仍不可用。"
 }
 
 ensure_scheduler() {
@@ -224,13 +224,13 @@ download_file() {
   local url="$1"
   local output="$2"
 
-  log "Downloading: ${url}"
+  log "正在下载：${url}"
   if command -v curl >/dev/null 2>&1; then
     curl -fL --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 "$url" -o "$output"
   elif command -v wget >/dev/null 2>&1; then
     wget --timeout=10 --tries=3 -O "$output" "$url"
   else
-    fail "curl or wget is required."
+    fail "需要安装 curl 或 wget。"
   fi
 }
 
@@ -245,7 +245,7 @@ verify_sha256() {
   elif command -v shasum >/dev/null 2>&1; then
     (cd "$(dirname "$package_file")" && grep " ${package_name}$" "$sums_file" | shasum -a 256 -c -)
   else
-    warn "sha256sum/shasum not found; skipping SHA256 verification."
+    warn "未找到 sha256sum/shasum，跳过 SHA256 校验。"
   fi
 }
 
@@ -268,7 +268,7 @@ install_relay_binary() {
   trap 'rm -rf "$tmp_dir"' RETURN
 
   tar -xzf "$package_file" -C "$tmp_dir"
-  [[ -x "${tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "Package is missing netbird-relay binary."
+  [[ -x "${tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "安装包缺少 netbird-relay 二进制。"
 
   run_as_root install -m 0755 -D "${tmp_dir}/netbird-relay/bin/netbird-relay" "$BIN_PATH"
   run_as_root install -m 0644 -D "${tmp_dir}/netbird-relay/services/netbird-relay.service" /etc/systemd/system/netbird-relay.service
@@ -294,7 +294,7 @@ main() {
 
   if [[ "$INSTALL_MODE" == "compose" ]]; then
     install_compose_dependencies
-    log "Starting Docker Compose configuration wizard."
+    log "正在启动 Docker Compose 配置向导。"
     DEPLOY_MODE=compose exec bash "$INSTALL_DIR/setup-relay.sh"
   fi
 
@@ -306,8 +306,8 @@ main() {
   package_file="$(download_relay_package "$arch" "$tmp_dir")"
   install_relay_binary "$package_file"
 
-  log "netbird-relay binary installed: ${BIN_PATH}"
-  log "Starting binary configuration wizard."
+  log "netbird-relay 二进制已安装：${BIN_PATH}"
+  log "正在启动二进制配置向导。"
   DEPLOY_MODE=binary exec bash "$INSTALL_DIR/setup-relay.sh"
 }
 
