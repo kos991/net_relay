@@ -20,6 +20,7 @@ SYSTEMD_SERVICE="${ROOT_DIR}/relay/netbird-relay.service"
 OPENRC_SERVICE="${ROOT_DIR}/relay/netbird-relay.openrc"
 LOGIN_CFG="${ROOT_DIR}/ova/files/99-net-relay-login.cfg"
 BUILD_OVA="${ROOT_DIR}/.github/workflows/build-ova.yml"
+SYNC_OFFICIAL="${ROOT_DIR}/.github/workflows/sync-official-relay.yml"
 SYSCTL_CONF="${ROOT_DIR}/ova/files/99-net-relay-sysctl.conf"
 
 bash -n "$FIRSTBOOT"
@@ -66,6 +67,10 @@ grep -q "relays.addresses" "$SETUP"
 grep -q "restart_service" "$SETUP"
 grep -q "systemctl enable --now netbird-relay" "$SETUP"
 grep -q "rc-update add netbird-relay default" "$SETUP"
+grep -q "DEPLOY_MODE" "$SETUP"
+grep -q "write_compose_file" "$SETUP"
+grep -q "docker compose -f" "$SETUP"
+grep -q "netbirdio/relay" "$SETUP"
 
 grep -q "root-password-confirmed" "$ROOT_PROFILE"
 grep -q "ROOT_PASSWORD_CONFIRM_FLAG" "$ROOT_PROFILE"
@@ -73,6 +78,9 @@ grep -q "passwd root" "$ROOT_PROFILE"
 grep -q "expire: true" "$LOGIN_CFG"
 
 grep -q "chage -d 0 root" "$BUILD_OVA"
+grep -q "Keep only latest release" "$BUILD_OVA"
+grep -q "gh release delete" "$BUILD_OVA"
+grep -q -- "--cleanup-tag" "$BUILD_OVA"
 grep -q "Build official NetBird relay binaries" "$BUILD_OVA"
 grep -q "OVA_NAME" "$BUILD_OVA"
 grep -q "QCOW2_NAME" "$BUILD_OVA"
@@ -129,9 +137,13 @@ grep -q "vm.page-cluster = 0" "$SYSCTL_CONF"
 
 grep -q "detect_os" "$INSTALL"
 grep -q "detect_arch" "$INSTALL"
+grep -q "detect_install_mode" "$INSTALL"
 grep -q "download_relay_package" "$INSTALL"
 grep -q "verify_sha256" "$INSTALL"
 grep -q "install_relay_binary" "$INSTALL"
+grep -q "install_compose_dependencies" "$INSTALL"
+grep -q "INSTALL_MODE" "$INSTALL"
+grep -q "compose" "$INSTALL"
 grep -q "netbird-relay-linux-\${arch}.tar.gz" "$INSTALL"
 grep -q "VERSION_CODENAME" "$INSTALL"
 grep -q "ID_LIKE" "$INSTALL"
@@ -155,12 +167,19 @@ grep -q "curl -sSL https://rels.jinfei.org | sh" "${ROOT_DIR}/README.md"
 grep -q 'proxyAsset("install.sh")' "$WORKER"
 grep -q "MAIN_SH =" "$WORKER"
 
-if grep -Eq "install_docker|docker-compose-plugin|docker-cli-compose|docker compose|docker-compose|netbirdio/relay" "$INSTALL" "$SETUP"; then
-  echo "Binary installer must not install or require Docker." >&2
+grep -q "name: sync-official-relay" "$SYNC_OFFICIAL"
+grep -q "schedule:" "$SYNC_OFFICIAL"
+grep -q "git ls-remote https://github.com/netbirdio/netbird.git" "$SYNC_OFFICIAL"
+grep -q ".github/netbird-relay-upstream.sha" "$SYNC_OFFICIAL"
+grep -q "gh workflow run build-ova" "$SYNC_OFFICIAL"
+grep -q "netbird_relay_ref" "$SYNC_OFFICIAL"
+
+if grep -Eq "install_docker|docker-compose-plugin|docker-cli-compose|docker compose|docker-compose|netbirdio/relay" "$FIRSTBOOT" "$RELS" "$ZRAM_SETUP" "$KERNEL_TUNING" "$ROOT_RESIZE" "$NETWORK_CHECK"; then
+  echo "OVA image scripts must not install or require Docker." >&2
   exit 1
 fi
 
-if grep -Eqi "docker|compose|sync-relay-certs" "$FIRSTBOOT" "$RELS" "$SETUP" "$INSTALL"; then
+if grep -Eqi "docker|compose|sync-relay-certs" "$FIRSTBOOT" "$RELS" "$ZRAM_SETUP" "$KERNEL_TUNING" "$ROOT_RESIZE" "$NETWORK_CHECK"; then
   echo "Binary installer and OVA scripts must not contain Docker/Compose runtime text." >&2
   exit 1
 fi

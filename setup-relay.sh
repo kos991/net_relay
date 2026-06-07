@@ -5,6 +5,9 @@ CONFIG_DIR="${CONFIG_DIR:-/etc/netbird-relay}"
 ENV_FILE="${ENV_FILE:-${CONFIG_DIR}/relay.env}"
 CERT_DIR="${CERT_DIR:-${CONFIG_DIR}/certs}"
 BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
+DEPLOY_MODE="${DEPLOY_MODE:-binary}"
+COMPOSE_FILE="${COMPOSE_FILE:-${CONFIG_DIR}/docker-compose.yml}"
+COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-${CONFIG_DIR}/compose.env}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -30,7 +33,7 @@ run_as_root() {
   elif command -v sudo >/dev/null 2>&1; then
     sudo "$@"
   else
-    fail "需要 root 权限执行：$*。"
+    fail "Root permission is required for: $*"
   fi
 }
 
@@ -44,29 +47,25 @@ trim() {
 read_input() {
   local prompt="$1"
   local value=""
-
   printf '%s' "$prompt" >&2
   if [[ -r /dev/tty ]]; then
-    IFS= read -r value </dev/tty || fail "无法从终端读取输入。"
+    IFS= read -r value </dev/tty || fail "Unable to read from terminal."
   else
-    IFS= read -r value || fail "无法读取输入，请在交互式终端中运行。"
+    IFS= read -r value || fail "Unable to read input. Run in an interactive terminal."
   fi
-
   trim "$value"
 }
 
 read_secret() {
   local prompt="$1"
   local value=""
-
   printf '%s' "$prompt" >&2
   if [[ -r /dev/tty ]]; then
-    IFS= read -r -s value </dev/tty || fail "无法从终端读取输入。"
+    IFS= read -r -s value </dev/tty || fail "Unable to read from terminal."
   else
-    IFS= read -r -s value || fail "无法读取输入，请在交互式终端中运行。"
+    IFS= read -r -s value || fail "Unable to read input. Run in an interactive terminal."
   fi
   printf '\n' >&2
-
   trim "$value"
 }
 
@@ -92,14 +91,13 @@ prompt_default() {
 
 select_relay_group_mode() {
   local value=""
-
   while true; do
     cat >&2 <<'EOF'
-部署模式：
-  1. 创建新的 Relay 节点组
-  2. 加入已有 Relay 节点组
+Deploy mode:
+  1. Create a new relay node group
+  2. Join an existing relay node group
 EOF
-    value="$(read_input '请选择部署模式 [1]: ')"
+    value="$(read_input 'Choose relay group mode [1]: ')"
     if [[ -z "$value" || "$value" == "1" ]]; then
       printf 'create'
       return 0
@@ -108,15 +106,15 @@ EOF
       printf 'join'
       return 0
     fi
-    warn "请输入 1 或 2。"
+    warn "Please enter 1 or 2."
   done
 }
 
 read_relay_auth_secret() {
   if [[ "$RELAY_GROUP_MODE" == "join" ]]; then
-    read_secret '已有节点组 secret（必填）：'
+    read_secret 'Existing relay group secret (required): '
   else
-    read_secret '认证密钥 secret（可留空自动生成；多节点请保存并复用）：'
+    read_secret 'Relay auth secret (empty means auto-generate; save it for multi-node reuse): '
   fi
 }
 
@@ -132,7 +130,7 @@ generate_secret() {
   elif command -v python3 >/dev/null 2>&1; then
     python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
   else
-    fail "需要 openssl 或 python3 才能自动生成认证密钥。"
+    fail "openssl or python3 is required to generate a relay auth secret."
   fi
 }
 
@@ -147,7 +145,9 @@ ensure_cron_service() {
 }
 
 service_reload_command() {
-  if command -v systemctl >/dev/null 2>&1; then
+  if [[ "$DEPLOY_MODE" == "compose" ]]; then
+    printf 'docker compose -f %s --env-file %s restart' "$COMPOSE_FILE" "$COMPOSE_ENV_FILE"
+  elif command -v systemctl >/dev/null 2>&1; then
     printf 'systemctl restart netbird-relay'
   else
     printf 'service netbird-relay restart'
@@ -160,9 +160,9 @@ ensure_acme_sh() {
     return 0
   fi
 
-  log "正在安装 acme.sh。"
+  log "Installing acme.sh..."
   curl https://get.acme.sh | sh -s email="${ACME_EMAIL}"
-  [[ -x "${HOME}/.acme.sh/acme.sh" ]] || fail "acme.sh 安装失败。"
+  [[ -x "${HOME}/.acme.sh/acme.sh" ]] || fail "acme.sh installation failed."
   printf '%s' "${HOME}/.acme.sh/acme.sh"
 }
 
@@ -173,8 +173,8 @@ issue_cloudflare_certificate() {
   local acme
   local reloadcmd
 
-  [[ -n "${ACME_EMAIL:-}" ]] || fail "ACME Email 不能为空。"
-  [[ -n "${CF_API_TOKEN:-}" ]] || fail "Cloudflare API Token 不能为空。"
+  [[ -n "${ACME_EMAIL:-}" ]] || fail "ACME email cannot be empty."
+  [[ -n "${CF_API_TOKEN:-}" ]] || fail "Cloudflare API token cannot be empty."
 
   run_as_root mkdir -p "$(dirname "$cert_file")"
   ensure_cron_service
@@ -192,15 +192,14 @@ issue_cloudflare_certificate() {
 
 select_certificate_mode() {
   local value=""
-
   while true; do
     cat >&2 <<'EOF'
-TLS 证书模式：
-  1. Cloudflare DNS 自动签发和续期（推荐）
-  2. 使用已有证书路径
-  3. 生成本地自签证书
+TLS certificate mode:
+  1. Cloudflare DNS via acme.sh (recommended)
+  2. Use existing certificate paths
+  3. Generate local self-signed certificate
 EOF
-    value="$(read_input '请选择证书模式 [1]: ')"
+    value="$(read_input 'Choose certificate mode [1]: ')"
     if [[ -z "$value" || "$value" == "1" ]]; then
       printf 'cloudflare'
       return 0
@@ -213,7 +212,7 @@ EOF
       printf 'selfsigned'
       return 0
     fi
-    warn "请输入 1、2 或 3。"
+    warn "Please enter 1, 2, or 3."
   done
 }
 
@@ -228,7 +227,7 @@ ensure_certificate() {
       return 0
       ;;
     existing)
-      [[ -s "$cert_file" && -s "$key_file" ]] || fail "已有证书路径无效：${cert_file} / ${key_file}"
+      [[ -s "$cert_file" && -s "$key_file" ]] || fail "Existing certificate paths are invalid: ${cert_file} / ${key_file}"
       return 0
       ;;
     selfsigned)
@@ -238,7 +237,7 @@ ensure_certificate() {
       ;;
   esac
 
-  warn "未找到 TLS 证书，自动生成本地自签证书：${cert_file}"
+  warn "Generating local self-signed certificate: ${cert_file}"
   run_as_root mkdir -p "$(dirname "$cert_file")"
   run_as_root openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
     -keyout "$key_file" \
@@ -268,6 +267,44 @@ EOF
   rm -f "$tmp_file"
 }
 
+write_compose_file() {
+  local env_tmp compose_tmp
+  env_tmp="$(mktemp)"
+  compose_tmp="$(mktemp)"
+
+  cat > "$env_tmp" <<EOF
+NB_LOG_LEVEL=info
+NB_LOG_FILE=console
+NB_LISTEN_ADDRESS=:${RELAY_PORT}
+NB_EXPOSED_ADDRESS=rels://${RELAY_DOMAIN}:${RELAY_PORT}
+NB_AUTH_SECRET=${RELAY_AUTH_SECRET}
+NB_ENABLE_STUN=true
+NB_STUN_PORTS=${STUN_PORT}
+NB_TLS_CERT_FILE=${TLS_CERT_FILE}
+NB_TLS_KEY_FILE=${TLS_KEY_FILE}
+EOF
+
+  cat > "$compose_tmp" <<EOF
+services:
+  netbird-relay:
+    image: netbirdio/relay:latest
+    container_name: netbird-relay
+    restart: unless-stopped
+    env_file:
+      - ${COMPOSE_ENV_FILE}
+    ports:
+      - "${RELAY_PORT}:${RELAY_PORT}/tcp"
+      - "${STUN_PORT}:${STUN_PORT}/udp"
+    volumes:
+      - ${CONFIG_DIR}:${CONFIG_DIR}:ro
+EOF
+
+  run_as_root mkdir -p "$CONFIG_DIR"
+  run_as_root install -m 0600 "$env_tmp" "$COMPOSE_ENV_FILE"
+  run_as_root install -m 0644 "$compose_tmp" "$COMPOSE_FILE"
+  rm -f "$env_tmp" "$compose_tmp"
+}
+
 restart_service() {
   if command -v systemctl >/dev/null 2>&1; then
     run_as_root systemctl daemon-reload
@@ -277,41 +314,47 @@ restart_service() {
     run_as_root rc-update add netbird-relay default
     run_as_root service netbird-relay restart
   else
-    fail "未找到 systemd 或 OpenRC，无法启动 netbird-relay 服务。"
+    fail "systemd or OpenRC is required to start netbird-relay."
   fi
+}
+
+restart_compose_service() {
+  run_as_root docker compose -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" up -d
 }
 
 print_header() {
   echo -e "${GREEN}=================================================${NC}"
-  echo -e "${GREEN}              NetBird Relay 安装向导             ${NC}"
-  echo -e "${GREEN}              官方源码编译二进制版               ${NC}"
+  echo -e "${GREEN}              NetBird Relay installer             ${NC}"
   echo -e "${GREEN}=================================================${NC}"
-  echo "说明：如需多 Relay 节点，请在每台节点输入同一个认证密钥。"
-  echo "证书默认使用 acme.sh + Cloudflare DNS 自动签发，并通过 reloadcmd 自动续期同步。"
+  echo "Deploy mode: ${DEPLOY_MODE}"
+  echo "Use the same auth secret on all nodes in one relay group."
+  echo "Cloudflare mode uses acme.sh DNS validation and reloadcmd renewal sync."
   echo
 }
 
 print_summary() {
-  local mode_label="创建新的 Relay 节点组"
+  local mode_label="create a new relay node group"
   if [[ "$RELAY_GROUP_MODE" == "join" ]]; then
-    mode_label="加入已有 Relay 节点组"
+    mode_label="join an existing relay node group"
   fi
 
   cat <<EOF
 
-==================== 安装完成 ====================
-当前节点组模式：${mode_label}
-Relay 二进制：${BIN_PATH}
-Relay 配置：${ENV_FILE}
-Relay 地址：rels://${RELAY_DOMAIN}:${RELAY_PORT}
-STUN 地址： stun:${RELAY_DOMAIN}:${STUN_PORT}
-认证密钥：  ${RELAY_AUTH_SECRET}
-TLS 证书：  ${TLS_CERT_FILE}
-TLS 私钥：  ${TLS_KEY_FILE}
-证书模式：  ${CERT_MODE}
-证书自动续期：Cloudflare 模式由 acme.sh cron 任务续期，并通过 reloadcmd 重启 netbird-relay。
+==================== Install complete ====================
+Deploy mode: ${DEPLOY_MODE}
+Relay group mode: ${mode_label}
+Relay binary: ${BIN_PATH}
+Relay env: ${ENV_FILE}
+Compose file: ${COMPOSE_FILE}
+Relay address: rels://${RELAY_DOMAIN}:${RELAY_PORT}
+STUN address: stun:${RELAY_DOMAIN}:${STUN_PORT}
+Relay auth secret: ${RELAY_AUTH_SECRET}
+TLS certificate: ${TLS_CERT_FILE}
+TLS key: ${TLS_KEY_FILE}
+Certificate mode: ${CERT_MODE}
+Certificate auto-renewal: Cloudflare mode uses acme.sh cron and reloadcmd.
 
-把下面配置合并到 NetBird Management 的 config.yaml：
+Merge into NetBird Management config.yaml:
 server:
   relays:
     addresses:
@@ -321,36 +364,44 @@ server:
     - uri: "stun:${RELAY_DOMAIN}:${STUN_PORT}"
       proto: udp
 
-如果这是追加节点，请把下面地址追加到现有 NetBird Management config.yaml：
+If this is an added node, append:
 relays.addresses:
   - "rels://${RELAY_DOMAIN}:${RELAY_PORT}"
 
-常用命令：
+Common commands:
   systemctl status netbird-relay
   journalctl -u netbird-relay -f
   service netbird-relay status
+  docker compose -f ${COMPOSE_FILE} --env-file ${COMPOSE_ENV_FILE} ps
 EOF
 }
 
-[[ -x "$BIN_PATH" ]] || fail "未找到 netbird-relay 二进制：${BIN_PATH}"
+if [[ "$DEPLOY_MODE" == "binary" ]]; then
+  [[ -x "$BIN_PATH" ]] || fail "netbird-relay binary not found: ${BIN_PATH}"
+elif [[ "$DEPLOY_MODE" == "compose" ]]; then
+  command -v docker >/dev/null 2>&1 || fail "Docker is required for compose deployment."
+  docker compose version >/dev/null 2>&1 || fail "Docker Compose is required for compose deployment."
+else
+  fail "DEPLOY_MODE must be binary or compose."
+fi
 
 print_header
 
 RELAY_GROUP_MODE="$(select_relay_group_mode)"
-RELAY_DOMAIN="$(prompt_nonempty 'Relay 域名，例如 rels.example.com：')"
-RELAY_PORT="$(prompt_default 'Relay TCP 端口 [8443]：' '8443')"
-STUN_PORT="$(prompt_default 'STUN UDP 端口 [3478]：' '3478')"
+RELAY_DOMAIN="$(prompt_nonempty 'Relay domain, for example rels.example.com: ')"
+RELAY_PORT="$(prompt_default 'Relay TCP port [8443]: ' '8443')"
+STUN_PORT="$(prompt_default 'STUN UDP port [3478]: ' '3478')"
 CERT_MODE="$(select_certificate_mode)"
-TLS_CERT_FILE="$(prompt_default "TLS 证书路径 [${CERT_DIR}/fullchain.pem]：" "${CERT_DIR}/fullchain.pem")"
-TLS_KEY_FILE="$(prompt_default "TLS 私钥路径 [${CERT_DIR}/privkey.pem]：" "${CERT_DIR}/privkey.pem")"
+TLS_CERT_FILE="$(prompt_default "TLS certificate path [${CERT_DIR}/fullchain.pem]: " "${CERT_DIR}/fullchain.pem")"
+TLS_KEY_FILE="$(prompt_default "TLS private key path [${CERT_DIR}/privkey.pem]: " "${CERT_DIR}/privkey.pem")"
 if [[ "$CERT_MODE" == "cloudflare" ]]; then
-  ACME_EMAIL="$(prompt_nonempty '证书申请邮箱 ACME Email：')"
-  CF_API_TOKEN="$(read_secret 'Cloudflare API Token（输入不显示）：')"
+  ACME_EMAIL="$(prompt_nonempty 'ACME email: ')"
+  CF_API_TOKEN="$(read_secret 'Cloudflare API token: ')"
 fi
 RELAY_AUTH_SECRET="$(read_relay_auth_secret)"
 
-validate_port "$RELAY_PORT" || fail "Relay 端口无效：${RELAY_PORT}"
-validate_port "$STUN_PORT" || fail "STUN 端口无效：${STUN_PORT}"
+validate_port "$RELAY_PORT" || fail "Invalid Relay port: ${RELAY_PORT}"
+validate_port "$STUN_PORT" || fail "Invalid STUN port: ${STUN_PORT}"
 
 if [[ "$RELAY_GROUP_MODE" == "join" && -z "$RELAY_AUTH_SECRET" ]]; then
   fail "must provide an existing relay auth secret when joining a relay node group."
@@ -358,10 +409,15 @@ fi
 
 if [[ -z "$RELAY_AUTH_SECRET" ]]; then
   RELAY_AUTH_SECRET="$(generate_secret)"
-  log "已自动生成认证密钥。请保存这个 secret，后续 Relay 节点和 Management 必须使用同一个值。"
+  log "Generated relay auth secret. Save it; all nodes and Management must use the same value."
 fi
 
 ensure_certificate "$RELAY_DOMAIN" "$TLS_CERT_FILE" "$TLS_KEY_FILE"
-write_env_file
-restart_service
+if [[ "$DEPLOY_MODE" == "compose" ]]; then
+  write_compose_file
+  restart_compose_service
+else
+  write_env_file
+  restart_service
+fi
 print_summary

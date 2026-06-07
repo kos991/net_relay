@@ -236,3 +236,15 @@ jobs:
             "release/${RELAY_ARM64_PACKAGE}" \
             "release/install.sh" \
             release/SHA256SUMS
+
+      - name: Keep only latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          keep_tag="${{ steps.meta.outputs.release_tag }}"
+          gh release list --limit 100 --json tagName,isDraft,isPrerelease,createdAt \
+            --jq '.[] | select(.tagName != "'"${keep_tag}"'") | select(.tagName | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) | .tagName' \
+            | while IFS= read -r old_tag; do
+                [ -n "$old_tag" ] || continue
+                gh release delete "$old_tag" --yes --cleanup-tag
+              done
