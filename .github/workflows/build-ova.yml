@@ -33,12 +33,13 @@ jobs:
           fetch-depth: 0
 
       - name: Check OVA scripts
-        run: TRACE_CHECKS=1 bash tests/ova-scripts-check.sh
+        run: bash tests/ova-scripts-check.sh
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.25.5"
+          cache: false
 
       - name: Install build tools
         run: |
