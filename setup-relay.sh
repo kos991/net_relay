@@ -225,6 +225,10 @@ server:
     - uri: "stun:${RELAY_DOMAIN}:${STUN_PORT}"
       proto: udp
 
+如果这是追加节点，请把下面地址追加到现有 NetBird Management config.yaml：
+relays.addresses:
+  - "rels://${RELAY_DOMAIN}:${RELAY_PORT}"
+
 常用命令：
   systemctl status netbird-relay
   journalctl -u netbird-relay -f
