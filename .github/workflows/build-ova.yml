@@ -37,7 +37,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check OVA scripts
-        run: bash tests/ova-scripts-check.sh
+        run: TRACE_CHECKS=1 bash tests/ova-scripts-check.sh
 
       - name: Set up Go
         uses: actions/setup-go@v5

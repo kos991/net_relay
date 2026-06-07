@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+[[ "${TRACE_CHECKS:-0}" == "1" ]] && set -x
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIRSTBOOT="${ROOT_DIR}/ova/files/net-relay-firstboot"

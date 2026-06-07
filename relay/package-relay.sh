@@ -7,10 +7,10 @@ PACKAGE_DIR="${PACKAGE_DIR:-${ROOT_DIR}/release}"
 TARGET_OS="${TARGET_OS:-linux}"
 TARGET_ARCH="${TARGET_ARCH:-amd64}"
 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF:-main}"
-PACKAGE_PREFIX="netbird-relay-linux"
+PACKAGE_PREFIX="netbird-relay-linux-"
 
 binary="${DIST_DIR}/netbird-relay-${TARGET_OS}-${TARGET_ARCH}"
-package_name="${PACKAGE_PREFIX}-${TARGET_ARCH}.tar.gz"
+package_name="${PACKAGE_PREFIX}${TARGET_ARCH}.tar.gz"
 staging_dir="$(mktemp -d)"
 
 cleanup() {
