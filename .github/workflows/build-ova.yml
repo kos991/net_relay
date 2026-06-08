@@ -169,8 +169,7 @@ jobs:
             --mkdir /etc/init.d \
             --mkdir /etc/ssh \
             --mkdir /etc/sysctl.d \
-            --mkdir /tmp/ova-apks \
-            --copy-in ova-build/apks/. /tmp/ova-apks \
+            --copy-in ova-build/apks:/tmp \
             --copy-in ova-build/relay-package/netbird-relay/bin/netbird-relay:/usr/local/bin \
             --copy-in ova-build/relay-package/netbird-relay/services/netbird-relay.openrc:/etc/init.d \
             --copy-in ova-build/netbird-relay-installer:/opt \
@@ -184,7 +183,7 @@ jobs:
             --copy-in ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in ova/files/root-profile:/root \
-            --run-command "apk add --no-network --allow-untrusted /tmp/ova-apks/*.apk && rm -rf /tmp/ova-apks" \
+            --run-command "apk add --no-network --allow-untrusted /tmp/apks/*.apk && rm -rf /tmp/apks" \
             --run-command "chage -d 0 root || passwd -e root || true" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
