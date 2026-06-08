@@ -7,9 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag, empty means next v1.0.N"
+        description: "Release tag, empty means next tag for selected channel"
         required: false
         default: ""
+      release_channel:
+        description: "Release channel: stable uses v1.0.N, test uses v0.1.N"
+        required: false
+        default: "stable"
       netbird_relay_ref:
         description: "NetBird upstream ref/tag/branch to build relay from"
         required: false
@@ -63,31 +67,62 @@ jobs:
         id: meta
         env:
           RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag || '' }}
+          RELEASE_CHANNEL_INPUT: ${{ github.event.inputs.release_channel || 'stable' }}
         run: |
+          release_channel="${RELEASE_CHANNEL_INPUT:-stable}"
+          case "${release_channel}" in
+            stable|test) ;;
+            *) echo "::error::release_channel must be stable or test"; exit 1 ;;
+          esac
+
           if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
             release_tag="${GITHUB_REF_NAME}"
+            case "${release_tag}" in
+              v0.*) release_channel="test" ;;
+              v1.*) release_channel="stable" ;;
+              *) echo "::error::Tag releases must use v0.* for test or v1.* for stable"; exit 1 ;;
+            esac
           elif [ -n "${RELEASE_TAG_INPUT}" ]; then
             release_tag="${RELEASE_TAG_INPUT}"
+            case "${release_tag}" in
+              v0.*) release_channel="test" ;;
+              v1.*) release_channel="stable" ;;
+              *) echo "::error::Release tag must use v0.* for test or v1.* for stable"; exit 1 ;;
+            esac
           else
             git fetch --tags --force
-            latest_patch="$(git tag -l 'v1.0.*' | sed -n 's/^v1\.0\.\([0-9][0-9]*\)$/\1/p' | sort -n | tail -1)"
-            if [ -z "${latest_patch}" ]; then
-              release_tag="v1.0.0"
+            if [ "${release_channel}" = "test" ]; then
+              tag_prefix="v0.1"
             else
-              release_tag="v1.0.$((latest_patch + 1))"
+              tag_prefix="v1.0"
+            fi
+            latest_patch="$(git tag -l "${tag_prefix}.*" | sed -n "s/^${tag_prefix//./\\.}\\.\\([0-9][0-9]*\\)$/\\1/p" | sort -n | tail -1)"
+            if [ -z "${latest_patch}" ]; then
+              release_tag="${tag_prefix}.0"
+            else
+              release_tag="${tag_prefix}.$((latest_patch + 1))"
             fi
           fi
 
-          case "${release_tag}" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "::error::Release tag must use semantic format, for example v1.0.0"; exit 1 ;;
-          esac
+          if [ "${release_channel}" = "test" ] && ! printf '%s' "${release_tag}" | grep -Eq '^v0\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Test releases must use v0.* semantic tags, for example v0.1.0"
+            exit 1
+          fi
+          if [ "${release_channel}" = "stable" ] && ! printf '%s' "${release_tag}" | grep -Eq '^v1\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Stable releases must use v1.* semantic tags, for example v1.0.0"
+            exit 1
+          fi
+
+          prerelease="false"
+          [ "${release_channel}" = "test" ] && prerelease="true"
 
           root_password="Net@rels2026"
           ssh_port="$(python3 -c "import secrets; print(secrets.randbelow(45536) + 20000)")"
 
           {
             echo "release_tag=${release_tag}"
+            echo "release_channel=${release_channel}"
+            echo "prerelease=${prerelease}"
             echo "root_password=${root_password}"
             echo "ssh_port=${ssh_port}"
             echo "update_note=$(git log -1 --pretty=%s)"
@@ -224,6 +259,9 @@ jobs:
           NetBird Relay upstream ref:
           - ${NETBIRD_RELAY_REF}
 
+          Release channel:
+          - ${{ steps.meta.outputs.release_channel }}
+
           本次更新：
           - ${{ steps.meta.outputs.update_note }}
           EOF
@@ -233,12 +271,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ steps.meta.outputs.release_tag }}"
+          release_args=()
+          if [ "${{ steps.meta.outputs.prerelease }}" = "true" ]; then
+            release_args+=(--prerelease)
+          fi
           if [ "${GITHUB_REF_TYPE:-}" != "tag" ]; then
             git tag "$tag"
             git push origin "$tag"
           fi
           gh release create "$tag" \
             --title "$tag" \
+            "${release_args[@]}" \
             --notes-file release/RELEASE_NOTES.md \
             "release/${INSTALLER_ARCHIVE_NAME}" \
             "release/${OVA_NAME}" \
@@ -255,8 +298,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           keep_tag="${{ steps.meta.outputs.release_tag }}"
+          channel="${{ steps.meta.outputs.release_channel }}"
+          if [ "${channel}" = "test" ]; then
+            tag_pattern="^v0\\.[0-9]+\\.[0-9]+$"
+          else
+            tag_pattern="^v1\\.[0-9]+\\.[0-9]+$"
+          fi
           gh release list --limit 100 --json tagName,isDraft,isPrerelease,createdAt \
-            --jq '.[] | select(.tagName != "'"${keep_tag}"'") | select(.tagName | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) | .tagName' \
+            --jq '.[] | select(.tagName != "'"${keep_tag}"'") | select(.tagName | test("'"${tag_pattern}"'")) | .tagName' \
             | while IFS= read -r old_tag; do
                 [ -n "$old_tag" ] || continue
                 gh release delete "$old_tag" --yes --cleanup-tag
