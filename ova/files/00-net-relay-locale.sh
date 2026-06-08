@@ -1,0 +1,5 @@
+export LANG=zh_CN.UTF-8
+export LANGUAGE=zh_CN:zh
+export LC_ALL=zh_CN.UTF-8
+export MUSL_LOCPATH=/usr/share/i18n/locales/musl
+export TZ=Asia/Shanghai

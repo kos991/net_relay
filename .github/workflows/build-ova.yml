@@ -35,7 +35,7 @@ jobs:
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || 'main' }}
-      OVA_APK_PACKAGES: bash ca-certificates curl openssl openssh-server procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted
+      OVA_APK_PACKAGES: bash ca-certificates curl openssl openssh-server procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata musl-locales musl-locales-lang font-noto-cjk fontconfig
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -168,6 +168,7 @@ jobs:
             --mkdir /usr/local/sbin \
             --mkdir /etc/init.d \
             --mkdir /etc/ssh \
+            --mkdir /etc/profile.d \
             --mkdir /etc/sysctl.d \
             --copy-in ova-build/apks:/tmp \
             --copy-in ova-build/relay-package/netbird-relay/bin/netbird-relay:/usr/local/bin \
@@ -180,10 +181,13 @@ jobs:
             --copy-in ova/files/setup-zram:/usr/local/sbin \
             --copy-in ova/files/setup-kernel-tuning:/usr/local/sbin \
             --copy-in ova/files/sshd_config:/etc/ssh \
+            --copy-in ova/files/00-net-relay-locale.sh:/etc/profile.d \
             --copy-in ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in ova/files/root-profile:/root \
             --run-command "apk add --no-network --allow-untrusted /tmp/apks/*.apk && rm -rf /tmp/apks" \
+            --run-command "ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && printf '%s\n' 'Asia/Shanghai' > /etc/timezone" \
+            --run-command "chmod 0644 /etc/profile.d/00-net-relay-locale.sh && fc-cache -f || true" \
             --run-command "chage -d 0 root || passwd -e root || true" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
