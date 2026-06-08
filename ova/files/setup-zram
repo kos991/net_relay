@@ -14,7 +14,7 @@ apt_run() {
 }
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "错误: 请以 root 权限运行" >&2
+  echo "Error: please run as root" >&2
   exit 1
 fi
 
@@ -23,7 +23,7 @@ if [[ -f /etc/alpine-release ]]; then
 elif [[ -f /etc/debian_version ]]; then
   OS="debian"
 else
-  echo "错误: 暂不支持此系统" >&2
+  echo "Error: this operating system is not supported" >&2
   exit 1
 fi
 

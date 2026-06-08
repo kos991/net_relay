@@ -38,7 +38,7 @@ run_as_root() {
   elif command -v sudo >/dev/null 2>&1; then
     sudo "$@"
   else
-    fail "需要 root 权限。请使用 root 运行，或先安装并配置 sudo。"
+    fail "Root privileges are required. Run as root, or install and configure sudo first."
   fi
 }
 
@@ -52,7 +52,7 @@ detect_install_mode() {
         INSTALL_MODE="compose"
         ;;
       *)
-        fail "未知参数：$1"
+        fail "Unknown argument: $1"
         ;;
     esac
     shift
@@ -60,7 +60,7 @@ detect_install_mode() {
 
   case "$INSTALL_MODE" in
     ""|binary|compose) ;;
-    *) fail "INSTALL_MODE 只能是 binary 或 compose。" ;;
+    *) fail "INSTALL_MODE must be binary or compose." ;;
   esac
 }
 
@@ -71,13 +71,13 @@ validate_release_base() {
       ;;
     https://*)
       if [[ "$ALLOW_CUSTOM_RELEASE_BASE" == "1" ]]; then
-        warn "正在使用自定义 RELEASE_BASE，请确认来源可信：${RELEASE_BASE}"
+        warn "Using custom RELEASE_BASE. Make sure the source is trusted: ${RELEASE_BASE}"
         return 0
       fi
       ;;
   esac
 
-  fail "RELEASE_BASE 必须是受信任的 HTTPS 地址。如确需自定义，请设置 ALLOW_CUSTOM_RELEASE_BASE=1。"
+  fail "RELEASE_BASE must be a trusted HTTPS URL. Set ALLOW_CUSTOM_RELEASE_BASE=1 only if you really need a custom source."
 }
 
 select_install_mode() {
@@ -89,15 +89,15 @@ select_install_mode() {
 
   while true; do
     cat >&2 <<'EOF'
-请选择安装模式：
-  1. 官方二进制安装（推荐，不安装 Docker）
+Select install mode:
+  1. Official binary install (recommended, no Docker)
   2. Docker Compose
 EOF
-    printf '%s' '请选择安装模式 [1]: ' >&2
+    printf '%s' 'Select install mode [1]: ' >&2
     if [[ -r /dev/tty ]]; then
-      IFS= read -r value </dev/tty || fail "无法读取安装模式。"
+      IFS= read -r value </dev/tty || fail "Unable to read install mode."
     else
-      IFS= read -r value || fail "无法读取安装模式。非交互安装请设置 INSTALL_MODE=binary 或 INSTALL_MODE=compose。"
+      IFS= read -r value || fail "Unable to read install mode. For non-interactive installs, set INSTALL_MODE=binary or INSTALL_MODE=compose."
     fi
 
     case "$value" in
@@ -110,14 +110,14 @@ EOF
         return 0
         ;;
       *)
-        warn "请输入 1 或 2。"
+        warn "Please enter 1 or 2."
         ;;
     esac
   done
 }
 
 detect_os() {
-  [[ -r /etc/os-release ]] || fail "无法识别系统：缺少 /etc/os-release。支持 Debian/Ubuntu/Rocky/Alma/Alpine。"
+  [[ -r /etc/os-release ]] || fail "Unable to detect OS: /etc/os-release is missing. Supported systems: Debian/Ubuntu/Rocky/Alma/Alpine."
 
   # shellcheck disable=SC1091
   . /etc/os-release
@@ -136,7 +136,7 @@ detect_os() {
       OS_FAMILY="alpine"
       ;;
     *)
-      fail "不支持的系统：${PRETTY_NAME:-${OS_ID}}。当前支持 Debian/Ubuntu/Rocky/Alma/Alpine。"
+      fail "Unsupported OS: ${PRETTY_NAME:-${OS_ID}}. Supported systems: Debian/Ubuntu/Rocky/Alma/Alpine."
       ;;
   esac
 }
@@ -152,7 +152,7 @@ detect_arch() {
       printf 'arm64'
       ;;
     *)
-      fail "不支持的 CPU 架构：${machine}。当前支持 amd64/arm64。"
+      fail "Unsupported CPU architecture: ${machine}. Supported architectures: amd64/arm64."
       ;;
   esac
 }
@@ -225,7 +225,7 @@ install_compose_dependencies() {
     run_as_root service docker start
   fi
 
-  docker compose version >/dev/null 2>&1 || fail "Docker Compose 安装后仍不可用。"
+  docker compose version >/dev/null 2>&1 || fail "Docker Compose is still unavailable after installation."
 }
 
 ensure_scheduler() {
@@ -242,7 +242,7 @@ download_file() {
   local url="$1"
   local output="$2"
 
-  log "正在下载：${url}"
+  log "Downloading: ${url}"
   if command -v curl >/dev/null 2>&1; then
     curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 "$url" -o "$output"
   elif command -v wget >/dev/null 2>&1; then
@@ -252,7 +252,7 @@ download_file() {
       wget --timeout=10 --tries=3 -O "$output" "$url"
     fi
   else
-    fail "需要安装 curl 或 wget。"
+    fail "curl or wget is required."
   fi
 }
 
@@ -267,7 +267,7 @@ verify_sha256() {
   elif command -v shasum >/dev/null 2>&1; then
     (cd "$(dirname "$package_file")" && awk -v n="$package_name" '$2==n{print; found=1} END{exit !found}' "$sums_file" | shasum -a 256 -c -)
   else
-    warn "未找到 sha256sum/shasum，跳过 SHA256 校验。"
+    warn "sha256sum/shasum was not found; skipping SHA256 verification."
   fi
 }
 
@@ -278,7 +278,7 @@ verify_tar_paths() {
   while IFS= read -r entry; do
     case "$entry" in
       ""|/*|../*|*/../*|*"/.."|*"/../"*|*":"*)
-        fail "安装包包含不安全路径：${entry}"
+        fail "Package contains an unsafe path: ${entry}"
         ;;
     esac
   done < <(tar -tzf "$package_file")
@@ -304,7 +304,7 @@ install_relay_binary() {
 
   verify_tar_paths "$package_file"
   tar -xzf "$package_file" -C "$tmp_dir"
-  [[ -x "${tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "安装包缺少 netbird-relay 二进制。"
+  [[ -x "${tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "Package is missing the netbird-relay binary."
 
   run_as_root install -m 0755 -D "${tmp_dir}/netbird-relay/bin/netbird-relay" "$BIN_PATH"
   run_as_root install -m 0644 -D "${tmp_dir}/netbird-relay/services/netbird-relay.service" /etc/systemd/system/netbird-relay.service
@@ -331,7 +331,7 @@ main() {
 
   if [[ "$INSTALL_MODE" == "compose" ]]; then
     install_compose_dependencies
-    log "正在启动 Docker Compose 配置向导。"
+    log "Starting Docker Compose setup wizard."
     DEPLOY_MODE=compose exec bash "$INSTALL_DIR/setup-relay.sh"
   fi
 
@@ -343,8 +343,8 @@ main() {
   package_file="$(download_relay_package "$arch" "$tmp_dir")"
   install_relay_binary "$package_file"
 
-  log "netbird-relay 二进制已安装：${BIN_PATH}"
-  log "正在启动二进制配置向导。"
+  log "netbird-relay binary installed: ${BIN_PATH}"
+  log "Starting binary setup wizard."
   DEPLOY_MODE=binary exec bash "$INSTALL_DIR/setup-relay.sh"
 }
 

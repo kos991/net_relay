@@ -8,12 +8,12 @@ log() {
 }
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "错误: 请以 root 权限运行" >&2
+  echo "Error: please run as root" >&2
   exit 1
 fi
 
 if [[ ! -f "$SYSCTL_CONF" ]]; then
-  echo "错误: 未找到 ${SYSCTL_CONF}" >&2
+  echo "Error: ${SYSCTL_CONF} was not found" >&2
   exit 1
 fi
 

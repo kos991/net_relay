@@ -35,7 +35,7 @@ run_as_root() {
   elif command -v sudo >/dev/null 2>&1; then
     sudo "$@"
   else
-    fail "需要 root 权限执行：$*"
+    fail "Root privileges are required to run: $*"
   fi
 }
 
@@ -51,9 +51,9 @@ read_input() {
   local value=""
   printf '%s' "$prompt" >&2
   if [[ -r /dev/tty ]]; then
-    IFS= read -r value </dev/tty || fail "无法从终端读取输入。"
+    IFS= read -r value </dev/tty || fail "Unable to read input from the terminal."
   else
-    IFS= read -r value || fail "无法读取输入，请在交互式终端中运行。"
+    IFS= read -r value || fail "Unable to read input. Please run in an interactive terminal."
   fi
   trim "$value"
 }
@@ -63,9 +63,9 @@ read_secret() {
   local value=""
   printf '%s' "$prompt" >&2
   if [[ -r /dev/tty ]]; then
-    IFS= read -r -s value </dev/tty || fail "无法从终端读取输入。"
+    IFS= read -r -s value </dev/tty || fail "Unable to read input from the terminal."
   else
-    IFS= read -r -s value || fail "无法读取输入，请在交互式终端中运行。"
+    IFS= read -r -s value || fail "Unable to read input. Please run in an interactive terminal."
   fi
   printf '\n' >&2
   trim "$value"
@@ -95,11 +95,11 @@ select_relay_group_mode() {
   local value=""
   while true; do
     cat >&2 <<'EOF'
-Relay 节点组模式：
-  1. 创建新的 Relay 节点组
-  2. 加入已有 Relay 节点组
+Relay node group mode:
+  1. Create a new Relay node group
+  2. Join an existing Relay node group
 EOF
-    value="$(read_input '请选择节点组模式 [1]: ')"
+    value="$(read_input 'Select node group mode [1]: ')"
     if [[ -z "$value" || "$value" == "1" ]]; then
       printf 'create'
       return 0
@@ -108,15 +108,15 @@ EOF
       printf 'join'
       return 0
     fi
-    warn "请输入 1 或 2。"
+    warn "Please enter 1 or 2."
   done
 }
 
 read_relay_auth_secret() {
   if [[ "$RELAY_GROUP_MODE" == "join" ]]; then
-    read_secret '已有节点组 secret（必填）：'
+    read_secret 'Existing node group secret (required): '
   else
-    read_secret 'Relay 认证 secret（留空自动生成；多节点请保存并复用）：'
+    read_secret 'Relay auth secret (leave empty to generate; save and reuse for multi-node groups): '
   fi
 }
 
@@ -132,7 +132,7 @@ generate_secret() {
   elif command -v python3 >/dev/null 2>&1; then
     python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
   else
-    fail "需要 openssl 或 python3 才能自动生成 Relay 认证 secret。"
+    fail "openssl or python3 is required to generate the Relay auth secret."
   fi
 }
 
@@ -156,7 +156,7 @@ ensure_service_user() {
     elif command -v addgroup >/dev/null 2>&1; then
       run_as_root addgroup -S "$SERVICE_GROUP"
     else
-      fail "无法创建服务组：${SERVICE_GROUP}"
+      fail "Unable to create service group: ${SERVICE_GROUP}"
     fi
   fi
 
@@ -166,7 +166,7 @@ ensure_service_user() {
     elif command -v adduser >/dev/null 2>&1; then
       run_as_root adduser -S -D -H -h /nonexistent -s /sbin/nologin -G "$SERVICE_GROUP" "$SERVICE_USER"
     else
-      fail "无法创建服务用户：${SERVICE_USER}"
+      fail "Unable to create service user: ${SERVICE_USER}"
     fi
   fi
 }
@@ -213,7 +213,7 @@ ensure_acme_sh() {
     return 0
   fi
 
-  log "正在安装 acme.sh..."
+  log "Installing acme.sh..."
   installer="$(mktemp)"
   trap 'rm -f "$installer"' RETURN
   curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 --retry 2 --retry-delay 2 https://get.acme.sh -o "$installer"
@@ -229,8 +229,8 @@ issue_cloudflare_certificate() {
   local acme
   local reloadcmd
 
-  [[ -n "${ACME_EMAIL:-}" ]] || fail "ACME 邮箱不能为空。"
-  [[ -n "${CF_API_TOKEN:-}" ]] || fail "Cloudflare API Token 不能为空。"
+  [[ -n "${ACME_EMAIL:-}" ]] || fail "ACME email must not be empty."
+  [[ -n "${CF_API_TOKEN:-}" ]] || fail "Cloudflare API Token must not be empty."
 
   run_as_root mkdir -p "$(dirname "$cert_file")"
   ensure_cron_service
@@ -249,12 +249,12 @@ select_certificate_mode() {
   local value=""
   while true; do
     cat >&2 <<'EOF'
-TLS 证书模式：
-  1. Cloudflare DNS + acme.sh 自动签发（推荐）
-  2. 使用已有证书路径
-  3. 生成本地自签证书
+TLS certificate mode:
+  1. Cloudflare DNS + acme.sh automatic issuance (recommended)
+  2. Use existing certificate paths
+  3. Generate a local self-signed certificate
 EOF
-    value="$(read_input '请选择证书模式 [1]: ')"
+    value="$(read_input 'Select certificate mode [1]: ')"
     if [[ -z "$value" || "$value" == "1" ]]; then
       printf 'cloudflare'
       return 0
@@ -267,7 +267,7 @@ EOF
       printf 'selfsigned'
       return 0
     fi
-    warn "请输入 1、2 或 3。"
+    warn "Please enter 1, 2, or 3."
   done
 }
 
@@ -282,7 +282,7 @@ ensure_certificate() {
       return 0
       ;;
     existing)
-      [[ -s "$cert_file" && -s "$key_file" ]] || fail "已有证书路径无效：${cert_file} / ${key_file}"
+      [[ -s "$cert_file" && -s "$key_file" ]] || fail "Existing certificate paths are invalid: ${cert_file} / ${key_file}"
       return 0
       ;;
     selfsigned)
@@ -292,7 +292,7 @@ ensure_certificate() {
       ;;
   esac
 
-  warn "正在生成本地自签证书：${cert_file}"
+  warn "Generating local self-signed certificate: ${cert_file}"
   run_as_root mkdir -p "$(dirname "$cert_file")"
   run_as_root openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
     -keyout "$key_file" \
@@ -369,7 +369,7 @@ restart_service() {
     run_as_root rc-update add netbird-relay default
     run_as_root service netbird-relay restart
   else
-    fail "需要 systemd 或 OpenRC 才能启动 netbird-relay。"
+    fail "systemd or OpenRC is required to start netbird-relay."
   fi
 }
 
@@ -379,11 +379,11 @@ restart_compose_service() {
 
 print_header() {
   echo -e "${GREEN}=================================================${NC}"
-  echo -e "${GREEN}              NetBird Relay 安装向导              ${NC}"
+  echo -e "${GREEN}              NetBird Relay Setup Wizard              ${NC}"
   echo -e "${GREEN}=================================================${NC}"
-  echo "部署模式：${DEPLOY_MODE}"
-  echo "同一个 Relay 节点组内的所有节点必须使用同一个 secret。"
-  echo "Cloudflare 模式使用 acme.sh DNS 验证，并通过 reloadcmd 自动续期同步。"
+  echo "Deployment mode: ${DEPLOY_MODE}"
+  echo "All nodes in the same Relay node group must use the same secret."
+  echo "Cloudflare mode uses acme.sh DNS validation and reloadcmd for renewal sync."
   echo
 }
 
@@ -397,35 +397,35 @@ print_summary() {
 
   cat <<EOF
 
-==================== 安装完成 ====================
-部署模式：${DEPLOY_MODE}
-Relay 节点组模式：${mode_label}
-Relay 二进制：${BIN_PATH}
-Relay 环境文件：${ENV_FILE}
-Compose 配置：${COMPOSE_FILE}
-Relay 地址：rels://${RELAY_DOMAIN}:${RELAY_PORT}
-STUN 地址：stun:${RELAY_DOMAIN}:${STUN_PORT}
-Relay 认证 secret：${relay_secret_hint}（完整值已写入 ${ENV_FILE}）
-TLS 证书：${TLS_CERT_FILE}
-TLS 私钥：${TLS_KEY_FILE}
-证书模式：${CERT_MODE}
-证书自动续期：Cloudflare 模式使用 acme.sh cron 和 reloadcmd。
+==================== Setup completed ====================
+Deployment mode: ${DEPLOY_MODE}
+Relay node group mode: ${mode_label}
+Relay binary: ${BIN_PATH}
+Relay environment file: ${ENV_FILE}
+Compose file: ${COMPOSE_FILE}
+Relay address: rels://${RELAY_DOMAIN}:${RELAY_PORT}
+STUN address: stun:${RELAY_DOMAIN}:${STUN_PORT}
+Relay auth secret: ${relay_secret_hint} (full value was written to ${ENV_FILE})
+TLS certificate: ${TLS_CERT_FILE}
+TLS private key: ${TLS_KEY_FILE}
+Certificate mode: ${CERT_MODE}
+Certificate renewal: Cloudflare mode uses acme.sh cron and reloadcmd.
 
-请合并到 NetBird Management config.yaml：
+Merge into NetBird Management config.yaml:
 server:
   relays:
     addresses:
       - "rels://${RELAY_DOMAIN}:${RELAY_PORT}"
-    secret: "<请从 ${ENV_FILE} 读取 NB_AUTH_SECRET>"
+    secret: "<read NB_AUTH_SECRET from ${ENV_FILE}>"
   stuns:
     - uri: "stun:${RELAY_DOMAIN}:${STUN_PORT}"
       proto: udp
 
-如果这是追加节点，请追加：
+If this is an additional node, append:
 relays.addresses:
   - "rels://${RELAY_DOMAIN}:${RELAY_PORT}"
 
-常用命令：
+Common commands:
   systemctl status netbird-relay
   journalctl -u netbird-relay -f
   service netbird-relay status
@@ -434,39 +434,39 @@ EOF
 }
 
 if [[ "$DEPLOY_MODE" == "binary" ]]; then
-  [[ -x "$BIN_PATH" ]] || fail "未找到 netbird-relay 二进制：${BIN_PATH}"
+  [[ -x "$BIN_PATH" ]] || fail "netbird-relay binary was not found: ${BIN_PATH}"
 elif [[ "$DEPLOY_MODE" == "compose" ]]; then
-  command -v docker >/dev/null 2>&1 || fail "Compose 部署需要 Docker。"
-  docker compose version >/dev/null 2>&1 || fail "Compose 部署需要 Docker Compose。"
+  command -v docker >/dev/null 2>&1 || fail "Compose deployment requires Docker."
+  docker compose version >/dev/null 2>&1 || fail "Compose deployment requires Docker Compose."
 else
-  fail "DEPLOY_MODE 只能是 binary 或 compose。"
+  fail "DEPLOY_MODE must be binary or compose."
 fi
 
 print_header
 
 RELAY_GROUP_MODE="$(select_relay_group_mode)"
-RELAY_DOMAIN="$(prompt_nonempty 'Relay 域名，例如 rels.example.com：')"
-RELAY_PORT="$(prompt_default 'Relay TCP 端口 [8443]：' '8443')"
-STUN_PORT="$(prompt_default 'STUN UDP 端口 [3478]：' '3478')"
+RELAY_DOMAIN="$(prompt_nonempty 'Relay domain, for example rels.example.com: ')"
+RELAY_PORT="$(prompt_default 'Relay TCP port [8443]: ' '8443')"
+STUN_PORT="$(prompt_default 'STUN UDP port [3478]: ' '3478')"
 CERT_MODE="$(select_certificate_mode)"
-TLS_CERT_FILE="$(prompt_default "TLS 证书路径 [${CERT_DIR}/fullchain.pem]：" "${CERT_DIR}/fullchain.pem")"
-TLS_KEY_FILE="$(prompt_default "TLS 私钥路径 [${CERT_DIR}/privkey.pem]：" "${CERT_DIR}/privkey.pem")"
+TLS_CERT_FILE="$(prompt_default "TLS certificate path [${CERT_DIR}/fullchain.pem]: " "${CERT_DIR}/fullchain.pem")"
+TLS_KEY_FILE="$(prompt_default "TLS private key path [${CERT_DIR}/privkey.pem]: " "${CERT_DIR}/privkey.pem")"
 if [[ "$CERT_MODE" == "cloudflare" ]]; then
-  ACME_EMAIL="$(prompt_nonempty 'ACME 邮箱：')"
-  CF_API_TOKEN="$(read_secret 'Cloudflare API Token：')"
+  ACME_EMAIL="$(prompt_nonempty 'ACME email: ')"
+  CF_API_TOKEN="$(read_secret 'Cloudflare API Token: ')"
 fi
 RELAY_AUTH_SECRET="$(read_relay_auth_secret)"
 
-validate_port "$RELAY_PORT" || fail "Relay 端口无效：${RELAY_PORT}"
-validate_port "$STUN_PORT" || fail "STUN 端口无效：${STUN_PORT}"
+validate_port "$RELAY_PORT" || fail "Invalid Relay port: ${RELAY_PORT}"
+validate_port "$STUN_PORT" || fail "Invalid STUN port: ${STUN_PORT}"
 
 if [[ "$RELAY_GROUP_MODE" == "join" && -z "$RELAY_AUTH_SECRET" ]]; then
-  fail "加入已有 Relay 节点组时必须提供已有 secret。"
+  fail "Joining an existing Relay node group requires an existing secret."
 fi
 
 if [[ -z "$RELAY_AUTH_SECRET" ]]; then
   RELAY_AUTH_SECRET="$(generate_secret)"
-  log "已自动生成 Relay 认证 secret。请保存它，所有节点和 Management 必须使用同一个值。"
+  log "Relay auth secret was generated automatically. Save it; all nodes and Management must use the same value."
 fi
 
 ensure_service_user

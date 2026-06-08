@@ -5,12 +5,12 @@ INSTALLER_DIR="/opt/netbird-relay-installer"
 ENV_FILE="/etc/netbird-relay/relay.env"
 
 fail() {
-  echo "错误：$*" >&2
+  echo "Error: $*" >&2
   exit 1
 }
 
 require_installer_dir() {
-  [[ -d "$INSTALLER_DIR" ]] || fail "安装器目录不存在：${INSTALLER_DIR}"
+  [[ -d "$INSTALLER_DIR" ]] || fail "installer directory is missing: ${INSTALLER_DIR}"
 }
 
 run_install() {
@@ -22,7 +22,7 @@ run_install() {
 update_binary() {
   require_installer_dir
   cd "$INSTALLER_DIR"
-  echo "正在下载并安装最新 netbird-relay 二进制..."
+  echo "Downloading and installing the latest netbird-relay binary..."
   bash ./install.sh
 }
 
@@ -32,7 +32,7 @@ show_status() {
   elif command -v service >/dev/null 2>&1; then
     service netbird-relay status
   else
-    fail "未找到 systemd 或 OpenRC。"
+    fail "systemd or OpenRC was not found."
   fi
 }
 
@@ -50,7 +50,7 @@ restart_service() {
   elif command -v service >/dev/null 2>&1; then
     service netbird-relay restart
   else
-    fail "未找到 systemd 或 OpenRC。"
+    fail "systemd or OpenRC was not found."
   fi
 }
 
@@ -71,8 +71,8 @@ show_certificate_status() {
   local not_before="-"
   local not_after="-"
   local remaining_days="-"
-  local expires_soon="未知"
-  local renewal_status="未检测到 acme.sh"
+  local expires_soon="unknown"
+  local renewal_status="acme.sh not detected"
 
   if [[ -s "$relay_cert" ]]; then
     not_before="$(openssl x509 -in "$relay_cert" -noout -startdate | cut -d= -f2-)"
@@ -82,40 +82,40 @@ show_certificate_status() {
       remaining_days="$(( (end_epoch - now_epoch) / 86400 ))"
     fi
     if openssl x509 -in "$relay_cert" -checkend 2592000 -noout >/dev/null 2>&1; then
-      expires_soon="否"
+      expires_soon="no"
     else
-      expires_soon="是"
+      expires_soon="yes"
     fi
   fi
 
   if [[ -x "${HOME}/.acme.sh/acme.sh" ]]; then
     if crontab -l 2>/dev/null | grep -q ".acme.sh"; then
-      renewal_status="已配置 acme.sh cron 自动续期"
+      renewal_status="acme.sh cron renewal is configured"
     else
-      renewal_status="已安装 acme.sh，但未检测到 cron 自动续期"
+      renewal_status="acme.sh is installed, but cron renewal was not detected"
     fi
   fi
 
   cat <<EOF
-==================== 证书状态 ====================
-Relay 证书文件：${relay_cert}
-Relay 私钥文件：${relay_key}
-证书有效期开始：${not_before}
-证书有效期结束：${not_after}
-剩余天数：${remaining_days}
-30 天内是否过期：${expires_soon}
-证书自动续期：${renewal_status}
+==================== Certificate Status ====================
+Relay certificate file: ${relay_cert}
+Relay private key file: ${relay_key}
+Certificate valid from: ${not_before}
+Certificate valid until: ${not_after}
+Remaining days: ${remaining_days}
+Expires within 30 days: ${expires_soon}
+Certificate renewal: ${renewal_status}
 EOF
 }
 
 show_system_optimization_status() {
   cat <<EOF
-==================== 系统优化状态 ====================
+==================== System Optimization Status ====================
 ZRAM:
-$(zramctl 2>/dev/null || echo "未检测到 zramctl 输出")
+$(zramctl 2>/dev/null || echo "zramctl output was not detected")
 
 Swap:
-$(swapon --show 2>/dev/null || echo "未检测到 swap 输出")
+$(swapon --show 2>/dev/null || echo "swap output was not detected")
 
 Kernel:
 swappiness=$(sysctl -n vm.swappiness 2>/dev/null || echo unknown)
@@ -132,23 +132,23 @@ print_menu() {
   clear || true
   cat <<'EOF'
 =================================================
-              NetBird Relay 管理菜单
+              NetBird Relay Management Menu
 =================================================
-1) 安装或重新配置 Relay
-2) 更新二进制并重启服务
-3) 查看服务状态
-4) 查看服务日志
-5) 重启服务
-6) 查看证书状态
-7) 查看 ZRAM 和内核优化状态
-0) 退出
+1) Install or reconfigure Relay
+2) Update binary and restart service
+3) Show service status
+4) Show service logs
+5) Restart service
+6) Show certificate status
+7) Show ZRAM and kernel tuning status
+0) Exit
 =================================================
 EOF
 }
 
 while true; do
   print_menu
-  printf '请选择：'
+  printf 'Select an option: '
   IFS= read -r choice
   case "$choice" in
     1) run_install ;;
@@ -159,8 +159,8 @@ while true; do
     6) show_certificate_status ;;
     7) show_system_optimization_status ;;
     0) exit 0 ;;
-    *) echo "无效选择：${choice}" ;;
+    *) echo "Invalid option: ${choice}" ;;
   esac
-  printf '\n按 Enter 继续...'
+  printf '\nPress Enter to continue...'
   IFS= read -r _
 done
