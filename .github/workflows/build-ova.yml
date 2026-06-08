@@ -257,6 +257,11 @@ jobs:
           - ${OVA_NAME}: includes OVF network Connection for importers that require it.
           - ${OVA_MINIMAL_NAME}: omits OVF network Connection for strict importers that reject it.
 
+          OVA firstboot:
+          - Enables ZRAM swap and daily ZRAM compact maintenance.
+          - Applies the conservative NetBird Relay kernel tuning profile.
+          - Run \`rels\` and choose option 7 to view ZRAM and kernel optimization status.
+
           NetBird Relay upstream ref:
           - ${NETBIRD_RELAY_REF}
 
