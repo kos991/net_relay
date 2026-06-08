@@ -7,6 +7,10 @@ on:
         description: "Cloudflare Worker name"
         required: false
         default: "rels-worker"
+      route:
+        description: "Cloudflare Worker route"
+        required: false
+        default: "rels.jinfei.org/*"
 
 permissions:
   contents: read
@@ -23,4 +27,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy worker/rels-worker.js --name "${{ github.event.inputs.worker_name }}" --compatibility-date 2026-06-08
+          command: deploy worker/rels-worker.js --name "${{ github.event.inputs.worker_name }}" --route "${{ github.event.inputs.route }}" --compatibility-date 2026-06-08
