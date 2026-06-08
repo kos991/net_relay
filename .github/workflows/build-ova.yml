@@ -204,7 +204,7 @@ jobs:
             --copy-in ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in ova/files/root-profile:/root \
-            --run-command "apk add --no-network --allow-untrusted /tmp/apks/*.apk && rm -rf /tmp/apks" \
+            --run-command "apk add --no-network --allow-untrusted --upgrade /tmp/apks/*.apk && rm -rf /tmp/apks" \
             --run-command "ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && printf '%s\n' 'Asia/Shanghai' > /etc/timezone" \
             --run-command "chmod 0644 /etc/profile.d/00-net-relay-locale.sh" \
             --run-command "chage -d 0 root || passwd -e root || true" \
