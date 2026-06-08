@@ -301,13 +301,18 @@ jobs:
           keep_tag="${{ steps.meta.outputs.release_tag }}"
           channel="${{ steps.meta.outputs.release_channel }}"
           if [ "${channel}" = "test" ]; then
-            tag_pattern="^v0\\.[0-9]+\\.[0-9]+$"
+            tag_prefix="v0."
           else
-            tag_pattern="^v1\\.[0-9]+\\.[0-9]+$"
+            tag_prefix="v1."
           fi
-          gh release list --limit 100 --json tagName,isDraft,isPrerelease,createdAt \
-            --jq '.[] | select(.tagName != "'"${keep_tag}"'") | select(.tagName | test("'"${tag_pattern}"'")) | .tagName' \
+          gh release list --limit 100 --json tagName \
+            --jq '.[].tagName' \
             | while IFS= read -r old_tag; do
                 [ -n "$old_tag" ] || continue
+                [ "$old_tag" != "$keep_tag" ] || continue
+                case "$old_tag" in
+                  "${tag_prefix}"*.*) ;;
+                  *) continue ;;
+                esac
                 gh release delete "$old_tag" --yes --cleanup-tag
               done
