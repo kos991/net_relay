@@ -57,6 +57,7 @@ Default login:
 Notes:
 - First login forces a root password change.
 - Firstboot checks the relay binary, disk space, network, ZRAM, and kernel tuning.
+- Management menu shortcut: rels
 - Run "rels" later to open the management menu.
 - Multi-node relay groups are supported; all nodes in a group must reuse the same secret.
 =================================================
