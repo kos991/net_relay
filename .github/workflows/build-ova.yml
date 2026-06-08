@@ -35,7 +35,7 @@ jobs:
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || 'main' }}
-      OVA_APK_PACKAGES: bash ca-certificates curl openssl openssh-server procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata
+      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata
     steps:
       - name: Checkout
         uses: actions/checkout@v4
