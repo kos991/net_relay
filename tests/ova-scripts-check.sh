@@ -178,14 +178,25 @@ grep -q "gve" "$NETWORK_CHECK"
 grep -q "udhcpc" "$NETWORK_CHECK"
 grep -q "ip route" "$NETWORK_CHECK"
 
-grep -q "zram-init" "$ZRAM_SETUP"
 grep -q "apt_run" "$ZRAM_SETUP"
 grep -q "flock /var/lib/dpkg/lock-frontend" "$ZRAM_SETUP"
+grep -q "write_zram_start_script" "$ZRAM_SETUP"
+grep -q "wait_for_zram_device" "$ZRAM_SETUP"
+grep -q "verify_zram_swap" "$ZRAM_SETUP"
 grep -q "zram-optimize.sh" "$ZRAM_SETUP"
 grep -q "vm.swappiness=100" "$ZRAM_SETUP"
 grep -q "vm.page-cluster=0" "$ZRAM_SETUP"
-grep -q "rc-update add zram-init default" "$ZRAM_SETUP"
+grep -q "/etc/init.d/zram" "$ZRAM_SETUP"
+grep -q "rc-update add zram default" "$ZRAM_SETUP"
+grep -q "rc-service zram restart" "$ZRAM_SETUP"
+grep -q "swapon --show=NAME --noheadings" "$ZRAM_SETUP"
+grep -q "/dev/zram0" "$ZRAM_SETUP"
 grep -q "0 3 \\* \\* \\* /usr/local/bin/zram-optimize.sh" "$ZRAM_SETUP"
+
+if grep -Eq "rc-service[[:space:]]+zram-init|rc-update[[:space:]]+add[[:space:]]+zram-init" "$ZRAM_SETUP"; then
+  echo "Alpine zram setup must not rely on a zram-init OpenRC service that is not shipped by the package." >&2
+  exit 1
+fi
 
 grep -q "sysctl --system" "$KERNEL_TUNING"
 grep -q "net.core.somaxconn = 4096" "$SYSCTL_CONF"
