@@ -200,6 +200,8 @@ grep -q "Vulnerabilities" "$BUILD_OVA"
 grep -q "release/trivy-fs.json" "$BUILD_OVA"
 grep -q "release/net-relay-sbom.cdx.json" "$BUILD_OVA"
 grep -q "CRITICAL,HIGH" "$BUILD_OVA"
+grep -q "cp main.sh release/main.sh" "$BUILD_OVA"
+grep -q '"release/main.sh"' "$BUILD_OVA"
 grep -q "netbird-relay-linux-amd64.tar.gz" "$BUILD_OVA"
 grep -q "netbird-relay-linux-arm64.tar.gz" "$BUILD_OVA"
 
@@ -319,8 +321,12 @@ grep -q "curl -sSL https://rels.jinfei.org | sh" "${ROOT_DIR}/README.md"
 grep -q "镜像不内置 Docker/Compose" "${ROOT_DIR}/README.md"
 grep -q "GPL-3.0" "${ROOT_DIR}/README.md"
 grep -q "GNU GENERAL PUBLIC LICENSE" "${ROOT_DIR}/LICENSE"
+grep -q 'proxyAsset("main.sh", false)' "$WORKER"
 grep -q 'proxyAsset("install.sh")' "$WORKER"
-grep -q "MAIN_SH =" "$WORKER"
+if grep -q "MAIN_SH =" "$WORKER"; then
+  echo "Worker must proxy release/main.sh instead of embedding a stale bootstrap script." >&2
+  exit 1
+fi
 
 grep -q "PubkeyAuthentication yes" "$SSHD_CONFIG"
 grep -q "UsePAM yes" "$SSHD_CONFIG"

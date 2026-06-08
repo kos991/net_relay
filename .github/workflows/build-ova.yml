@@ -153,6 +153,7 @@ jobs:
           cp -a relay setup-relay.sh install.sh main.sh README.md .gitignore .gitattributes ova-build/netbird-relay-installer/
           tar -xzf "release/${RELAY_AMD64_PACKAGE}" -C ova-build/relay-package
           git archive --format=tar.gz --prefix=net_relay-main/ HEAD -o "release/${INSTALLER_ARCHIVE_NAME}"
+          cp main.sh release/main.sh
           cp install.sh release/install.sh
 
       - name: Download Alpine cloud image
@@ -326,7 +327,7 @@ jobs:
             --ignore-unfixed \
             --exit-code 1 \
             release/net-relay-sbom.cdx.json
-          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" install.sh trivy-rootfs.json trivy-fs.json net-relay-sbom.cdx.json > SHA256SUMS)
+          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh trivy-rootfs.json trivy-fs.json net-relay-sbom.cdx.json > SHA256SUMS)
 
       - name: Write release notes
         run: |
@@ -353,6 +354,7 @@ jobs:
           - ${OVA_NAME}: OVA with OVF network Connection for importers that require it.
           - ${OVA_MINIMAL_NAME}: OVA without OVF network Connection for strict importers that reject it.
           - ${RAW_NAME}: RAW image for cloud import workflows such as Aliyun custom images.
+          - main.sh: secure bootstrap script served by https://rels.jinfei.org.
           - install.sh: one-click installer for Debian, Ubuntu, Rocky, Alma, and Alpine.
           - SHA256SUMS: SHA256 checksums for all published artifacts.
           - trivy-rootfs.json, trivy-fs.json, net-relay-sbom.cdx.json: vulnerability scan reports and CycloneDX SBOM.
@@ -406,6 +408,7 @@ jobs:
             "release/${RAW_NAME}" \
             "release/${RELAY_AMD64_PACKAGE}" \
             "release/${RELAY_ARM64_PACKAGE}" \
+            "release/main.sh" \
             "release/install.sh" \
             release/trivy-rootfs.json \
             release/trivy-fs.json \

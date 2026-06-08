@@ -1,0 +1,26 @@
+name: deploy-worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      worker_name:
+        description: "Cloudflare Worker name"
+        required: false
+        default: "rels-worker"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy Cloudflare Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy worker/rels-worker.js --name "${{ github.event.inputs.worker_name }}"
