@@ -182,6 +182,7 @@ grep -q "apt_run" "$ZRAM_SETUP"
 grep -q "flock /var/lib/dpkg/lock-frontend" "$ZRAM_SETUP"
 grep -q "write_zram_start_script" "$ZRAM_SETUP"
 grep -q "wait_for_zram_device" "$ZRAM_SETUP"
+grep -q "require_cmd" "$ZRAM_SETUP"
 grep -q "verify_zram_swap" "$ZRAM_SETUP"
 grep -q "zram-optimize.sh" "$ZRAM_SETUP"
 grep -q "vm.swappiness=100" "$ZRAM_SETUP"
@@ -195,6 +196,11 @@ grep -q "0 3 \\* \\* \\* /usr/local/bin/zram-optimize.sh" "$ZRAM_SETUP"
 
 if grep -Eq "rc-service[[:space:]]+zram-init|rc-update[[:space:]]+add[[:space:]]+zram-init" "$ZRAM_SETUP"; then
   echo "Alpine zram setup must not rely on a zram-init OpenRC service that is not shipped by the package." >&2
+  exit 1
+fi
+
+if grep -Eq "apk[[:space:]]+add" "$ZRAM_SETUP"; then
+  echo "OVA firstboot zram setup must not run apk add; dependencies are preinstalled offline during image build." >&2
   exit 1
 fi
 

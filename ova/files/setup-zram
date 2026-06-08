@@ -13,6 +13,13 @@ apt_run() {
   fi
 }
 
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "Error: required command is missing: $1" >&2
+    exit 1
+  }
+}
+
 wait_for_zram_device() {
   local i
   for i in 1 2 3 4 5; do
@@ -115,7 +122,11 @@ log "size=${ZRAM_SIZE}, algorithm=${BEST_ALGO}"
 write_zram_start_script
 
 if [[ "$OS" == "alpine" ]]; then
-  apk add --no-cache util-linux bash cronie >/dev/null 2>&1 || true
+  require_cmd mkswap
+  require_cmd swapon
+  require_cmd rc-update
+  require_cmd rc-service
+  require_cmd crontab
   write_openrc_service
   rc-update add zram default
   rc-service zram restart
