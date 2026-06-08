@@ -23,4 +23,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy worker/rels-worker.js --name "${{ github.event.inputs.worker_name }}"
+          command: deploy worker/rels-worker.js --name "${{ github.event.inputs.worker_name }}" --compatibility-date 2026-06-08
