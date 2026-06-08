@@ -1,0 +1,250 @@
+name: build-ova
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag, empty means next v1.0.N"
+        required: false
+        default: ""
+      netbird_relay_ref:
+        description: "NetBird upstream ref/tag/branch to build relay from"
+        required: false
+        default: "main"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ALPINE_IMAGE_URL: https://dev.alpinelinux.org/~tomalok/alpine-cloud-images/v3.23/nocloud/x86_64/nocloud_alpine-3.23.4-x86_64-bios-cloudinit-r0.qcow2
+      OVA_NAME: net-relay-alpine-x86_64.ova
+      QCOW2_NAME: net-relay-alpine-x86_64.qcow2.gz
+      RAW_NAME: net-relay-alpine-x86_64.raw.img.gz
+      INSTALLER_ARCHIVE_NAME: net_relay-main.tar.gz
+      RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
+      RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
+      NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || 'main' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check OVA scripts
+        run: bash tests/ova-scripts-check.sh
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+          cache: false
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-utils libguestfs-tools tar gzip
+
+      - name: Build official NetBird relay binaries
+        run: |
+          mkdir -p dist release
+          TARGET_OS=linux TARGET_ARCH=amd64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash relay/build-relay.sh
+          TARGET_OS=linux TARGET_ARCH=arm64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash relay/build-relay.sh
+          TARGET_OS=linux TARGET_ARCH=amd64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash relay/package-relay.sh
+          TARGET_OS=linux TARGET_ARCH=arm64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash relay/package-relay.sh
+
+      - name: Generate release metadata
+        id: meta
+        env:
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag || '' }}
+        run: |
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            release_tag="${GITHUB_REF_NAME}"
+          elif [ -n "${RELEASE_TAG_INPUT}" ]; then
+            release_tag="${RELEASE_TAG_INPUT}"
+          else
+            git fetch --tags --force
+            latest_patch="$(git tag -l 'v1.0.*' | sed -n 's/^v1\.0\.\([0-9][0-9]*\)$/\1/p' | sort -n | tail -1)"
+            if [ -z "${latest_patch}" ]; then
+              release_tag="v1.0.0"
+            else
+              release_tag="v1.0.$((latest_patch + 1))"
+            fi
+          fi
+
+          case "${release_tag}" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::Release tag must use semantic format, for example v1.0.0"; exit 1 ;;
+          esac
+
+          root_password="Net@rels2026"
+          ssh_port="$(python3 -c "import secrets; print(secrets.randbelow(45536) + 20000)")"
+
+          {
+            echo "release_tag=${release_tag}"
+            echo "root_password=${root_password}"
+            echo "ssh_port=${ssh_port}"
+            echo "update_note=$(git log -1 --pretty=%s)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Prepare installer payload
+        run: |
+          mkdir -p release
+          mkdir -p ova-build/netbird-relay-installer ova-build/relay-package
+          cp -a relay setup-relay.sh install.sh main.sh README.md .gitignore .gitattributes ova-build/netbird-relay-installer/
+          tar -xzf "release/${RELAY_AMD64_PACKAGE}" -C ova-build/relay-package
+          git archive --format=tar.gz --prefix=net_relay-main/ HEAD -o "release/${INSTALLER_ARCHIVE_NAME}"
+          cp install.sh release/install.sh
+
+      - name: Download Alpine cloud image
+        run: |
+          curl -fsSL "$ALPINE_IMAGE_URL" -o ova-build/alpine.qcow2
+          qemu-img resize ova-build/alpine.qcow2 3G
+          sudo guestfish --rw -a ova-build/alpine.qcow2 <<'EOF'
+          run
+          resize2fs /dev/sda
+          EOF
+
+      - name: Customize Alpine OVA image
+        env:
+          LIBGUESTFS_BACKEND: direct
+          ROOT_PASSWORD: ${{ steps.meta.outputs.root_password }}
+          SSH_PORT: ${{ steps.meta.outputs.ssh_port }}
+        run: |
+          set +e
+          sudo -E virt-customize --no-network --format qcow2 -a ova-build/alpine.qcow2 \
+            --root-password "password:${ROOT_PASSWORD}" \
+            --mkdir /usr/local/bin \
+            --mkdir /usr/local/sbin \
+            --mkdir /etc/init.d \
+            --mkdir /etc/ssh \
+            --mkdir /etc/sysctl.d \
+            --copy-in ova-build/relay-package/netbird-relay/bin/netbird-relay:/usr/local/bin \
+            --copy-in ova-build/relay-package/netbird-relay/services/netbird-relay.openrc:/etc/init.d \
+            --copy-in ova-build/netbird-relay-installer:/opt \
+            --copy-in ova/files/rels:/usr/local/sbin \
+            --copy-in ova/files/net-relay-firstboot:/usr/local/sbin \
+            --copy-in ova/files/setup-root-resize:/usr/local/sbin \
+            --copy-in ova/files/setup-network-check:/usr/local/sbin \
+            --copy-in ova/files/setup-zram:/usr/local/sbin \
+            --copy-in ova/files/setup-kernel-tuning:/usr/local/sbin \
+            --copy-in ova/files/sshd_config:/etc/ssh \
+            --copy-in ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
+            --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
+            --copy-in ova/files/root-profile:/root \
+            --run-command "chage -d 0 root || passwd -e root || true" \
+            --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
+            --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
+            --run-command "chmod +x /usr/local/bin/netbird-relay /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /usr/local/sbin/setup-root-resize /usr/local/sbin/setup-network-check /usr/local/sbin/setup-zram /usr/local/sbin/setup-kernel-tuning /opt/netbird-relay-installer/setup-relay.sh" \
+            --run-command "chmod +x /etc/init.d/netbird-relay.openrc && mv /etc/init.d/netbird-relay.openrc /etc/init.d/netbird-relay" \
+            --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile" 2>&1 | tee ova-build/virt-customize.log
+          status="${PIPESTATUS[0]}"
+          if [ "$status" -ne 0 ]; then
+            {
+              echo "virt-customize failed with exit code ${status}"
+              tail -n 120 ova-build/virt-customize.log
+            } | python3 -c 'import sys; print("::error::" + sys.stdin.read().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+            exit "$status"
+          fi
+
+      - name: Package OVA release images
+        run: |
+          qemu-img convert -p -O vmdk -o subformat=streamOptimized,adapter_type=lsilogic ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vmdk
+          vmdk_size="$(stat -c%s release/net-relay-alpine-x86_64.vmdk)"
+          cat > release/net-relay-alpine-x86_64.ovf <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1" xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" xmlns:vmw="http://www.vmware.com/schema/ovf">
+            <References>
+              <File ovf:id="file1" ovf:href="net-relay-alpine-x86_64.vmdk" ovf:size="${vmdk_size}"/>
+            </References>
+            <DiskSection>
+              <Info>Virtual disk information</Info>
+              <Disk ovf:diskId="disk1" ovf:fileRef="file1" ovf:capacity="3" ovf:capacityAllocationUnits="byte * 2^30" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
+            </DiskSection>
+            <NetworkSection>
+              <Info>Logical networks used in the package</Info>
+              <Network ovf:name="VM Network"><Description>VM Network</Description></Network>
+            </NetworkSection>
+            <VirtualSystem ovf:id="net-relay-alpine">
+              <Info>NetBird Relay Alpine OVA</Info>
+              <Name>net-relay-alpine</Name>
+              <OperatingSystemSection ovf:id="94" vmw:osType="otherlinux64Guest"><Info>Alpine Linux</Info></OperatingSystemSection>
+              <VirtualHardwareSection>
+                <Info>Virtual hardware requirements</Info>
+                <Item><rasd:Description>1 virtual CPU</rasd:Description><rasd:ElementName>1 virtual CPU</rasd:ElementName><rasd:InstanceID>1</rasd:InstanceID><rasd:ResourceType>3</rasd:ResourceType><rasd:VirtualQuantity>1</rasd:VirtualQuantity></Item>
+                <Item><rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits><rasd:Description>1024MB memory</rasd:Description><rasd:ElementName>1024MB memory</rasd:ElementName><rasd:InstanceID>2</rasd:InstanceID><rasd:ResourceType>4</rasd:ResourceType><rasd:VirtualQuantity>1024</rasd:VirtualQuantity></Item>
+                <Item><rasd:Description>SCSI Controller</rasd:Description><rasd:ElementName>SCSI Controller 0</rasd:ElementName><rasd:InstanceID>3</rasd:InstanceID><rasd:ResourceSubType>lsilogic</rasd:ResourceSubType><rasd:ResourceType>6</rasd:ResourceType></Item>
+                <Item><rasd:AddressOnParent>0</rasd:AddressOnParent><rasd:Description>E1000 network adapter</rasd:Description><rasd:ElementName>Ethernet 1</rasd:ElementName><rasd:InstanceID>4</rasd:InstanceID><rasd:ResourceSubType>E1000</rasd:ResourceSubType><rasd:ResourceType>10</rasd:ResourceType></Item>
+                <Item><rasd:Description>Disk</rasd:Description><rasd:ElementName>Disk 1</rasd:ElementName><rasd:HostResource>ovf:/disk/disk1</rasd:HostResource><rasd:InstanceID>5</rasd:InstanceID><rasd:Parent>3</rasd:Parent><rasd:ResourceType>17</rasd:ResourceType></Item>
+              </VirtualHardwareSection>
+            </VirtualSystem>
+          </Envelope>
+          EOF
+          tar -C release -cf "release/${OVA_NAME}" net-relay-alpine-x86_64.ovf net-relay-alpine-x86_64.vmdk
+          qemu-img convert -p -O qcow2 -c ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.qcow2
+          gzip -9 release/net-relay-alpine-x86_64.qcow2
+          qemu-img convert -p -O raw ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.raw.img
+          gzip -9 release/net-relay-alpine-x86_64.raw.img
+          (cd release && sha256sum "$OVA_NAME" "$QCOW2_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" install.sh > SHA256SUMS)
+
+      - name: Write release notes
+        run: |
+          cat > release/RELEASE_NOTES.md <<EOF
+          # NetBird Relay ${{ steps.meta.outputs.release_tag }}
+
+          \`\`\`bash
+          curl -sSL https://rels.jinfei.org | sh
+          \`\`\`
+
+          ## OVA access
+
+          - User: root
+          - Initial password: ${{ steps.meta.outputs.root_password }}
+          - SSH port: ${{ steps.meta.outputs.ssh_port }}
+          - Login command: \`ssh -p ${{ steps.meta.outputs.ssh_port }} root@<OVA_IP>\`
+          - First login will force a root password change before initialization continues.
+
+          NetBird Relay upstream ref:
+          - ${NETBIRD_RELAY_REF}
+
+          本次更新：
+          - ${{ steps.meta.outputs.update_note }}
+          EOF
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.meta.outputs.release_tag }}"
+          if [ "${GITHUB_REF_TYPE:-}" != "tag" ]; then
+            git tag "$tag"
+            git push origin "$tag"
+          fi
+          gh release create "$tag" \
+            --title "$tag" \
+            --notes-file release/RELEASE_NOTES.md \
+            "release/${INSTALLER_ARCHIVE_NAME}" \
+            "release/${OVA_NAME}" \
+            "release/${QCOW2_NAME}" \
+            "release/${RAW_NAME}" \
+            "release/${RELAY_AMD64_PACKAGE}" \
+            "release/${RELAY_ARM64_PACKAGE}" \
+            "release/install.sh" \
+            release/SHA256SUMS
+
+      - name: Keep only latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          keep_tag="${{ steps.meta.outputs.release_tag }}"
+          gh release list --limit 100 --json tagName,isDraft,isPrerelease,createdAt \
+            --jq '.[] | select(.tagName != "'"${keep_tag}"'") | select(.tagName | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) | .tagName' \
+            | while IFS= read -r old_tag; do
+                [ -n "$old_tag" ] || continue
+                gh release delete "$old_tag" --yes --cleanup-tag
+              done
