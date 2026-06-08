@@ -288,6 +288,10 @@ jobs:
           LIBGUESTFS_BACKEND: direct
         run: |
           mkdir -p ova-build/rootfs
+          cleanup_rootfs() {
+            rm -rf ova-build/rootfs
+          }
+          trap cleanup_rootfs EXIT
           sudo virt-copy-out -a ova-build/alpine.qcow2 / ova-build/rootfs
           sudo chown -R "$(id -u):$(id -g)" ova-build/rootfs
           trivy rootfs \
@@ -295,11 +299,21 @@ jobs:
             --pkg-types os \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
-            --exit-code 1 \
+            --exit-code 0 \
             --format json \
             --output release/trivy-rootfs.json \
             ova-build/rootfs
-          rm -rf ova-build/rootfs
+          if python3 -c 'import json,sys; data=json.load(open("release/trivy-rootfs.json")); sys.exit(0 if any(r.get("Vulnerabilities") for r in data.get("Results", [])) else 1)'; then
+            trivy rootfs \
+              --scanners vuln \
+              --pkg-types os \
+              --severity CRITICAL,HIGH \
+              --ignore-unfixed \
+              --exit-code 0 \
+              --format table \
+              ova-build/rootfs
+            exit 1
+          fi
 
       - name: Generate release SBOM
         run: |
