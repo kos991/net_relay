@@ -177,6 +177,7 @@ jobs:
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
             --run-command "chmod +x /usr/local/bin/netbird-relay /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /usr/local/sbin/setup-root-resize /usr/local/sbin/setup-network-check /usr/local/sbin/setup-zram /usr/local/sbin/setup-kernel-tuning /opt/netbird-relay-installer/setup-relay.sh" \
+            --run-command "ln -sf /usr/local/sbin/rels /usr/local/bin/rels" \
             --run-command "chmod +x /etc/init.d/netbird-relay.openrc && mv /etc/init.d/netbird-relay.openrc /etc/init.d/netbird-relay" \
             --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile" 2>&1 | tee ova-build/virt-customize.log
           status="${PIPESTATUS[0]}"
