@@ -24,6 +24,7 @@ jobs:
     env:
       ALPINE_IMAGE_URL: https://dev.alpinelinux.org/~tomalok/alpine-cloud-images/v3.23/nocloud/x86_64/nocloud_alpine-3.23.4-x86_64-bios-cloudinit-r0.qcow2
       OVA_NAME: net-relay-alpine-x86_64.ova
+      OVA_MINIMAL_NAME: net-relay-alpine-x86_64-minimal.ova
       QCOW2_NAME: net-relay-alpine-x86_64.qcow2.gz
       RAW_NAME: net-relay-alpine-x86_64.raw.img.gz
       INSTALLER_ARCHIVE_NAME: net_relay-main.tar.gz
@@ -156,7 +157,10 @@ jobs:
         run: |
           qemu-img convert -p -O vmdk -o subformat=streamOptimized,adapter_type=lsilogic ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vmdk
           vmdk_size="$(stat -c%s release/net-relay-alpine-x86_64.vmdk)"
-          cat > release/net-relay-alpine-x86_64.ovf <<EOF
+          write_ovf() {
+            local ovf_path="$1"
+            local network_connection="$2"
+            cat > "$ovf_path" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1" xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" xmlns:vmw="http://www.vmware.com/schema/ovf">
             <References>
@@ -179,18 +183,22 @@ jobs:
                 <Item><rasd:Description>1 virtual CPU</rasd:Description><rasd:ElementName>1 virtual CPU</rasd:ElementName><rasd:InstanceID>1</rasd:InstanceID><rasd:ResourceType>3</rasd:ResourceType><rasd:VirtualQuantity>1</rasd:VirtualQuantity></Item>
                 <Item><rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits><rasd:Description>1024MB memory</rasd:Description><rasd:ElementName>1024MB memory</rasd:ElementName><rasd:InstanceID>2</rasd:InstanceID><rasd:ResourceType>4</rasd:ResourceType><rasd:VirtualQuantity>1024</rasd:VirtualQuantity></Item>
                 <Item><rasd:Description>SCSI Controller</rasd:Description><rasd:ElementName>SCSI Controller 0</rasd:ElementName><rasd:InstanceID>3</rasd:InstanceID><rasd:ResourceSubType>lsilogic</rasd:ResourceSubType><rasd:ResourceType>6</rasd:ResourceType></Item>
-                <Item><rasd:AddressOnParent>0</rasd:AddressOnParent><rasd:Description>E1000 network adapter</rasd:Description><rasd:ElementName>Ethernet 1</rasd:ElementName><rasd:InstanceID>4</rasd:InstanceID><rasd:ResourceSubType>E1000</rasd:ResourceSubType><rasd:ResourceType>10</rasd:ResourceType></Item>
+                <Item><rasd:AddressOnParent>0</rasd:AddressOnParent>${network_connection}<rasd:Description>E1000 network adapter</rasd:Description><rasd:ElementName>Ethernet 1</rasd:ElementName><rasd:InstanceID>4</rasd:InstanceID><rasd:ResourceSubType>E1000</rasd:ResourceSubType><rasd:ResourceType>10</rasd:ResourceType></Item>
                 <Item><rasd:Description>Disk</rasd:Description><rasd:ElementName>Disk 1</rasd:ElementName><rasd:HostResource>ovf:/disk/disk1</rasd:HostResource><rasd:InstanceID>5</rasd:InstanceID><rasd:Parent>3</rasd:Parent><rasd:ResourceType>17</rasd:ResourceType></Item>
               </VirtualHardwareSection>
             </VirtualSystem>
           </Envelope>
           EOF
+          }
+          write_ovf release/net-relay-alpine-x86_64.ovf '<rasd:Connection>VM Network</rasd:Connection>'
+          write_ovf release/net-relay-alpine-x86_64-minimal.ovf ''
           tar -C release -cf "release/${OVA_NAME}" net-relay-alpine-x86_64.ovf net-relay-alpine-x86_64.vmdk
+          tar -C release -cf "release/${OVA_MINIMAL_NAME}" net-relay-alpine-x86_64-minimal.ovf net-relay-alpine-x86_64.vmdk
           qemu-img convert -p -O qcow2 -c ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.qcow2
           gzip -9 release/net-relay-alpine-x86_64.qcow2
           qemu-img convert -p -O raw ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.raw.img
           gzip -9 release/net-relay-alpine-x86_64.raw.img
-          (cd release && sha256sum "$OVA_NAME" "$QCOW2_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" install.sh > SHA256SUMS)
+          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$QCOW2_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" install.sh > SHA256SUMS)
 
       - name: Write release notes
         run: |
@@ -208,6 +216,10 @@ jobs:
           - SSH port: ${{ steps.meta.outputs.ssh_port }}
           - Login command: \`ssh -p ${{ steps.meta.outputs.ssh_port }} root@<OVA_IP>\`
           - First login will force a root password change before initialization continues.
+
+          OVA variants:
+          - ${OVA_NAME}: includes OVF network Connection for importers that require it.
+          - ${OVA_MINIMAL_NAME}: omits OVF network Connection for strict importers that reject it.
 
           NetBird Relay upstream ref:
           - ${NETBIRD_RELAY_REF}
@@ -230,6 +242,7 @@ jobs:
             --notes-file release/RELEASE_NOTES.md \
             "release/${INSTALLER_ARCHIVE_NAME}" \
             "release/${OVA_NAME}" \
+            "release/${OVA_MINIMAL_NAME}" \
             "release/${QCOW2_NAME}" \
             "release/${RAW_NAME}" \
             "release/${RELAY_AMD64_PACKAGE}" \

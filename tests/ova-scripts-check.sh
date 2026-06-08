@@ -90,14 +90,18 @@ grep -q "gh release delete" "$BUILD_OVA"
 grep -q -- "--cleanup-tag" "$BUILD_OVA"
 grep -q "Build official NetBird relay binaries" "$BUILD_OVA"
 grep -q "OVA_NAME" "$BUILD_OVA"
+grep -q "OVA_MINIMAL_NAME" "$BUILD_OVA"
 grep -q "QCOW2_NAME" "$BUILD_OVA"
 grep -q "RAW_NAME" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.ova" "$BUILD_OVA"
+grep -q "net-relay-alpine-x86_64-minimal.ova" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.qcow2.gz" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.raw.img.gz" "$BUILD_OVA"
 grep -q "SSH port:" "$BUILD_OVA"
 grep -q "ssh -p" "$BUILD_OVA"
 grep -q "AddressOnParent" "$BUILD_OVA"
+grep -q "rasd:Connection" "$BUILD_OVA"
+grep -q "write_ovf release/net-relay-alpine-x86_64-minimal.ovf ''" "$BUILD_OVA"
 grep -q "setup-root-resize" "$BUILD_OVA"
 grep -q "setup-network-check" "$BUILD_OVA"
 grep -q "setup-zram" "$BUILD_OVA"
@@ -257,7 +261,7 @@ if grep -Eq "OVA_SSH_PORT\\.txt|OVA_ACCESS\\.md|## OVA ports" "$BUILD_OVA"; then
   exit 1
 fi
 
-if grep -Eq "rasd:Connection|rasd:AutomaticAllocation" "$BUILD_OVA"; then
-  echo "OVA OVF network adapter must avoid Connection and AutomaticAllocation for broad importer compatibility." >&2
+if grep -Eq "rasd:AutomaticAllocation" "$BUILD_OVA"; then
+  echo "OVA OVF network adapter must avoid AutomaticAllocation for broad importer compatibility." >&2
   exit 1
 fi
