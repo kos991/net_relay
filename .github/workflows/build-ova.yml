@@ -35,7 +35,7 @@ jobs:
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || 'main' }}
-      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata
+      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -169,6 +169,7 @@ jobs:
             --mkdir /etc/init.d \
             --mkdir /etc/ssh \
             --mkdir /etc/profile.d \
+            --mkdir /etc/modules-load.d \
             --mkdir /etc/sysctl.d \
             --copy-in ova-build/apks:/tmp \
             --copy-in ova-build/relay-package/netbird-relay/bin/netbird-relay:/usr/local/bin \
@@ -182,6 +183,7 @@ jobs:
             --copy-in ova/files/setup-kernel-tuning:/usr/local/sbin \
             --copy-in ova/files/sshd_config:/etc/ssh \
             --copy-in ova/files/00-net-relay-locale.sh:/etc/profile.d \
+            --copy-in ova/files/virtio-modules.conf:/etc/modules-load.d \
             --copy-in ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in ova/files/root-profile:/root \
@@ -193,6 +195,8 @@ jobs:
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
             --run-command "chmod +x /usr/local/bin/netbird-relay /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /usr/local/sbin/setup-root-resize /usr/local/sbin/setup-network-check /usr/local/sbin/setup-zram /usr/local/sbin/setup-kernel-tuning /opt/netbird-relay-installer/setup-relay.sh" \
             --run-command "ln -sf /usr/local/sbin/rels /usr/local/bin/rels" \
+            --run-command "setup-cloud-init" \
+            --run-command "rc-update add qemu-guest-agent default || true" \
             --run-command "chmod +x /etc/init.d/netbird-relay.openrc && mv /etc/init.d/netbird-relay.openrc /etc/init.d/netbird-relay" \
             --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile" 2>&1 | tee ova-build/virt-customize.log
           status="${PIPESTATUS[0]}"
