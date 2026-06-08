@@ -173,7 +173,7 @@ jobs:
             --copy-in ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in ova/files/root-profile:/root \
-            --run-command "apk add --no-cache bash curl openssl util-linux iproute2 cloud-utils-growpart e2fsprogs-extra zram-init cronie" \
+            --run-command "apk add --no-cache bash curl openssl util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie" \
             --run-command "chage -d 0 root || passwd -e root || true" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \

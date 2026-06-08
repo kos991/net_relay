@@ -109,6 +109,8 @@ grep -q "net-relay-alpine-x86_64.raw.img.gz" "$BUILD_OVA"
 grep -q "SSH port:" "$BUILD_OVA"
 grep -q "ssh -p" "$BUILD_OVA"
 grep -q "apk add --no-cache bash" "$BUILD_OVA"
+grep -q "xfsprogs" "$BUILD_OVA"
+grep -q "btrfs-progs" "$BUILD_OVA"
 if grep -q "virt-customize --no-network" "$BUILD_OVA"; then
   echo "OVA customization must allow network access when installing Alpine runtime packages." >&2
   exit 1
