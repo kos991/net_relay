@@ -10,34 +10,36 @@ ZRAM_SETUP="/usr/local/sbin/setup-zram"
 KERNEL_TUNING="/usr/local/sbin/setup-kernel-tuning"
 
 fail() {
-  echo "error: $*" >&2
+  echo "错误：$*" >&2
   exit 1
 }
 
 check_cmd() {
-  command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
+  command -v "$1" >/dev/null 2>&1 || fail "缺少必要命令：$1"
 }
 
 check_disk_space() {
   local available_mb
   available_mb="$(df -Pm / | awk 'NR == 2 {print $4}')"
-  [[ "$available_mb" =~ ^[0-9]+$ ]] || fail "unable to check free space on /"
-  (( available_mb >= 256 )) || fail "/ needs at least 256 MB free, current ${available_mb} MB"
+  [[ "$available_mb" =~ ^[0-9]+$ ]] || fail "无法检查 / 可用空间"
+  (( available_mb >= 256 )) || fail "/ 至少需要 256 MB 可用空间，当前 ${available_mb} MB"
 }
 
 run_preflight_checks() {
   echo "Running OVA boot preflight checks..."
-  [[ -d "$INSTALLER_DIR" ]] || fail "installer directory missing: ${INSTALLER_DIR}"
-  [[ -x "$BIN_PATH" ]] || fail "netbird-relay binary missing: ${BIN_PATH}"
-  [[ -x "$ROOT_RESIZE" ]] || fail "root resize script missing: ${ROOT_RESIZE}"
-  [[ -x "$NETWORK_CHECK" ]] || fail "network check script missing: ${NETWORK_CHECK}"
-  [[ -x "$ZRAM_SETUP" ]] || fail "zram setup script missing: ${ZRAM_SETUP}"
-  [[ -x "$KERNEL_TUNING" ]] || fail "kernel tuning script missing: ${KERNEL_TUNING}"
+  echo "[1/5] 环境预检：检查安装器、二进制和基础命令..."
+  [[ -d "$INSTALLER_DIR" ]] || fail "安装器目录不存在：${INSTALLER_DIR}"
+  [[ -x "$BIN_PATH" ]] || fail "netbird-relay 二进制不存在：${BIN_PATH}"
+  [[ -x "$ROOT_RESIZE" ]] || fail "根分区扩容脚本不存在：${ROOT_RESIZE}"
+  [[ -x "$NETWORK_CHECK" ]] || fail "网络自检脚本不存在：${NETWORK_CHECK}"
+  [[ -x "$ZRAM_SETUP" ]] || fail "ZRAM 脚本不存在：${ZRAM_SETUP}"
+  [[ -x "$KERNEL_TUNING" ]] || fail "内核优化脚本不存在：${KERNEL_TUNING}"
   check_cmd bash
   check_cmd curl
   check_cmd openssl
   check_disk_space
   echo "Preflight checks completed."
+  echo "[1/5] 环境预检完成。"
 }
 
 if [[ -f "$FLAG" ]]; then
@@ -47,30 +49,44 @@ fi
 clear || true
 cat <<'EOF'
 =================================================
-          NetBird Relay OVA firstboot
+          NetBird Relay OVA 首次初始化向导
 =================================================
 
-Default login:
-- User: root
-- SSH port: __SSH_PORT__
+默认登录信息：
+- 用户：root
+- SSH 端口：__SSH_PORT__
 
-Notes:
-- First login forces a root password change.
-- Firstboot checks the relay binary, disk space, network, ZRAM, and kernel tuning.
-- Management menu shortcut: rels
-- Run "rels" later to open the management menu.
-- Multi-node relay groups are supported; all nodes in a group must reuse the same secret.
+首次初始化步骤：
+1. 环境预检
+2. 根分区扩容
+3. 网络自检
+4. ZRAM 和内核优化
+5. Relay 配置向导
+
+提示：
+- 初始化完成后，输入 rels 可再次打开管理菜单。
+- 多节点 Relay 组必须复用同一个 secret。
 =================================================
 EOF
 
 run_preflight_checks
-"$ROOT_RESIZE" || echo "warning: root resize failed, continuing Relay setup."
-"$NETWORK_CHECK" || echo "warning: network self-check failed, continuing Relay setup."
-"$ZRAM_SETUP" || echo "warning: ZRAM setup failed, continuing Relay setup."
-"$KERNEL_TUNING" || echo "warning: kernel tuning failed, continuing Relay setup."
+echo "[2/5] 根分区扩容：尝试扩展磁盘和文件系统..."
+"$ROOT_RESIZE" || echo "警告：根分区扩容失败，将继续 Relay 配置。"
+echo "[2/5] 根分区扩容步骤结束。"
+
+echo "[3/5] 网络自检：加载常见虚拟化网卡模块并检查 DHCP..."
+"$NETWORK_CHECK" || echo "警告：网络自检失败，将继续 Relay 配置。"
+echo "[3/5] 网络自检步骤结束。"
+
+echo "[4/5] ZRAM 和内核优化：启用压缩交换、维护任务和保守内核参数..."
+"$ZRAM_SETUP" || echo "警告：ZRAM 初始化失败，将继续 Relay 配置。"
+"$KERNEL_TUNING" || echo "警告：内核优化失败，将继续 Relay 配置。"
+echo "[4/5] ZRAM 和内核优化步骤结束。"
 
 cd "$INSTALLER_DIR"
+echo "[5/5] Relay 配置向导：开始配置 NetBird Relay。"
 bash ./setup-relay.sh
 
 mkdir -p "$(dirname "$FLAG")"
 touch "$FLAG"
+echo "首次初始化完成。以后输入 rels 可再次打开管理菜单。"
