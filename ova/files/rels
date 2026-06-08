@@ -108,6 +108,26 @@ Relay 私钥文件：${relay_key}
 EOF
 }
 
+show_system_optimization_status() {
+  cat <<EOF
+==================== 系统优化状态 ====================
+ZRAM:
+$(zramctl 2>/dev/null || echo "未检测到 zramctl 输出")
+
+Swap:
+$(swapon --show 2>/dev/null || echo "未检测到 swap 输出")
+
+Kernel:
+swappiness=$(sysctl -n vm.swappiness 2>/dev/null || echo unknown)
+page-cluster=$(sysctl -n vm.page-cluster 2>/dev/null || echo unknown)
+default_qdisc=$(sysctl -n net.core.default_qdisc 2>/dev/null || echo unknown)
+tcp_congestion_control=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)
+somaxconn=$(sysctl -n net.core.somaxconn 2>/dev/null || echo unknown)
+netdev_max_backlog=$(sysctl -n net.core.netdev_max_backlog 2>/dev/null || echo unknown)
+======================================================
+EOF
+}
+
 print_menu() {
   clear || true
   cat <<'EOF'
@@ -120,6 +140,7 @@ print_menu() {
 4) 查看服务日志
 5) 重启服务
 6) 查看证书状态
+7) 查看 ZRAM 和内核优化状态
 0) 退出
 =================================================
 EOF
@@ -136,6 +157,7 @@ while true; do
     4) show_logs ;;
     5) restart_service ;;
     6) show_certificate_status ;;
+    7) show_system_optimization_status ;;
     0) exit 0 ;;
     *) echo "无效选择：${choice}" ;;
   esac
