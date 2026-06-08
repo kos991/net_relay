@@ -333,9 +333,29 @@ jobs:
           cat > release/RELEASE_NOTES.md <<EOF
           # NetBird Relay ${{ steps.meta.outputs.release_tag }}
 
+          This release provides official NetBird Relay binaries built from the upstream NetBird source, plus ready-to-import OVA and RAW images.
+
+          ## Quick install
           \`\`\`bash
           curl -sSL https://rels.jinfei.org | sh
           \`\`\`
+
+          ## Release channel
+
+          - Channel: ${{ steps.meta.outputs.release_channel }}
+          - Test releases use v0.* tags; stable releases use v1.* tags.
+          - NetBird Relay upstream ref: ${NETBIRD_RELAY_REF}
+
+          ## Published assets
+
+          - ${RELAY_AMD64_PACKAGE}: Linux amd64 official relay binary package.
+          - ${RELAY_ARM64_PACKAGE}: Linux arm64 official relay binary package.
+          - ${OVA_NAME}: OVA with OVF network Connection for importers that require it.
+          - ${OVA_MINIMAL_NAME}: OVA without OVF network Connection for strict importers that reject it.
+          - ${RAW_NAME}: RAW image for cloud import workflows such as Aliyun custom images.
+          - install.sh: one-click installer for Debian, Ubuntu, Rocky, Alma, and Alpine.
+          - SHA256SUMS: SHA256 checksums for all published artifacts.
+          - trivy-rootfs.json, trivy-fs.json, net-relay-sbom.cdx.json: vulnerability scan reports and CycloneDX SBOM.
 
           ## OVA access
 
@@ -345,23 +365,21 @@ jobs:
           - Login command: \`ssh -p ${{ steps.meta.outputs.ssh_port }} root@<OVA_IP>\`
           - First login will force a root password change before initialization continues.
 
-          OVA variants:
-          - ${OVA_NAME}: includes OVF network Connection for importers that require it.
-          - ${OVA_MINIMAL_NAME}: omits OVF network Connection for strict importers that reject it.
+          ## OVA initialization
 
-          OVA firstboot:
           - Enables ZRAM swap and daily ZRAM compact maintenance.
           - Applies the conservative NetBird Relay kernel tuning profile.
+          - Expands the root partition when the virtual disk has been resized.
+          - Runs DHCP and network preflight checks on first boot.
+          - Installs cloud-init, qemu-guest-agent, VirtIO support, xfsprogs, and btrfs-progs.
           - Run \`rels\` and choose option 7 to view ZRAM and kernel optimization status.
 
-          NetBird Relay upstream ref:
-          - ${NETBIRD_RELAY_REF}
+          ## Security and verification
 
-          Release channel:
-          - ${{ steps.meta.outputs.release_channel }}
-
-          Update:
-          - ${{ steps.meta.outputs.update_note }}
+          - Relay service runs as the dedicated netbird-relay user in binary mode.
+          - Release build runs govulncheck and Trivy High/Critical gates before publishing.
+          - Verify downloaded artifacts with SHA256SUMS before production use.
+          - Update: ${{ steps.meta.outputs.update_note }}
           EOF
 
       - name: Publish release
