@@ -175,6 +175,7 @@ if grep -Eq 'QCOW2_NAME|net-relay-alpine-x86_64\.qcow2\.gz|qemu-img convert -p -
 fi
 grep -q "TRIVY_VERSION" "$BUILD_OVA"
 grep -q "TRIVY_CHECKSUM" "$BUILD_OVA"
+grep -q 'go-version: "1.25.10"' "$BUILD_OVA"
 grep -q "Install Trivy" "$BUILD_OVA"
 grep -q "sha256sum -c" "$BUILD_OVA"
 grep -q "Scan relay source with govulncheck" "$BUILD_OVA"
@@ -358,6 +359,7 @@ grep -q "netbird_relay_ref" "$SYNC_OFFICIAL"
 
 grep -q "TRIVY_VERSION" "$VALIDATE_WORKFLOW"
 grep -q "TRIVY_CHECKSUM" "$VALIDATE_WORKFLOW"
+grep -q 'go-version: "1.25.10"' "$VALIDATE_WORKFLOW"
 grep -q "Install Trivy" "$VALIDATE_WORKFLOW"
 grep -q "sha256sum -c" "$VALIDATE_WORKFLOW"
 grep -q "Scan repository with Trivy" "$VALIDATE_WORKFLOW"
