@@ -153,7 +153,7 @@ jobs:
           SSH_PORT: ${{ steps.meta.outputs.ssh_port }}
         run: |
           set +e
-          sudo -E virt-customize --no-network --format qcow2 -a ova-build/alpine.qcow2 \
+          sudo -E virt-customize --format qcow2 -a ova-build/alpine.qcow2 \
             --root-password "password:${ROOT_PASSWORD}" \
             --mkdir /usr/local/bin \
             --mkdir /usr/local/sbin \
@@ -173,6 +173,7 @@ jobs:
             --copy-in ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in ova/files/root-profile:/root \
+            --run-command "apk add --no-cache bash curl openssl util-linux iproute2 cloud-utils-growpart e2fsprogs-extra zram-init cronie" \
             --run-command "chage -d 0 root || passwd -e root || true" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
