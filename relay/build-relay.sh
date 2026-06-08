@@ -6,6 +6,7 @@ BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/.build/netbird}"
 OUTPUT_DIR="${OUTPUT_DIR:-${ROOT_DIR}/dist}"
 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF:-main}"
 NETBIRD_RELAY_REPO="${NETBIRD_RELAY_REPO:-https://github.com/netbirdio/netbird.git}"
+GO_SECURITY_PATCH_MODULES="${GO_SECURITY_PATCH_MODULES:-golang.org/x/net@v0.55.0}"
 
 TARGET_OS="${TARGET_OS:-linux}"
 TARGET_ARCH="${TARGET_ARCH:-amd64}"
@@ -44,6 +45,12 @@ binary="${OUTPUT_DIR}/netbird-relay-${TARGET_OS}-${TARGET_ARCH}"
 log "Building netbird-relay ${NETBIRD_RELAY_REF} (${commit}) for ${TARGET_OS}/${TARGET_ARCH}"
 (
   cd "$BUILD_DIR"
+  if [[ -n "$GO_SECURITY_PATCH_MODULES" ]]; then
+    read -r -a security_patch_modules <<< "$GO_SECURITY_PATCH_MODULES"
+    log "Applying Go security module overrides: ${GO_SECURITY_PATCH_MODULES}"
+    go get "${security_patch_modules[@]}"
+    go mod tidy
+  fi
   CGO_ENABLED=0 GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" go build \
     -trimpath \
     -ldflags "-s -w -X github.com/netbirdio/netbird/version.version=${NETBIRD_RELAY_REF} -X github.com/netbirdio/netbird/version.commit=${commit}" \
