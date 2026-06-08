@@ -114,11 +114,9 @@ grep -q "tag_prefix" "$BUILD_OVA"
 grep -q "Build official NetBird relay binaries" "$BUILD_OVA"
 grep -q "OVA_NAME" "$BUILD_OVA"
 grep -q "OVA_MINIMAL_NAME" "$BUILD_OVA"
-grep -q "QCOW2_NAME" "$BUILD_OVA"
 grep -q "RAW_NAME" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.ova" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64-minimal.ova" "$BUILD_OVA"
-grep -q "net-relay-alpine-x86_64.qcow2.gz" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.raw.img.gz" "$BUILD_OVA"
 grep -q "SSH port:" "$BUILD_OVA"
 grep -q "ssh -p" "$BUILD_OVA"
@@ -168,6 +166,10 @@ grep -q "setup-kernel-tuning" "$BUILD_OVA"
 grep -q "qemu-img convert -p -O raw" "$BUILD_OVA"
 grep -q '"release/${RAW_NAME}"' "$BUILD_OVA"
 grep -q '"$RAW_NAME"' "$BUILD_OVA"
+if grep -Eq 'QCOW2_NAME|net-relay-alpine-x86_64\.qcow2\.gz|qemu-img convert -p -O qcow2|release/\$\{QCOW2_NAME\}|\\"\$QCOW2_NAME\\"' "$BUILD_OVA"; then
+  echo "QCOW2 release assets are not supported; publish RAW for cloud import instead." >&2
+  exit 1
+fi
 grep -q "netbird-relay-linux-amd64.tar.gz" "$BUILD_OVA"
 grep -q "netbird-relay-linux-arm64.tar.gz" "$BUILD_OVA"
 
