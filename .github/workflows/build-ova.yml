@@ -7,13 +7,21 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag, empty means next v1.0.N"
+        description: "Release tag, empty means next tag for selected channel"
         required: false
         default: ""
+      release_channel:
+        description: "Release channel: stable uses v1.0.N, test uses v0.1.N"
+        required: false
+        default: "stable"
       netbird_relay_ref:
         description: "NetBird upstream ref/tag/branch to build relay from"
         required: false
         default: "main"
+      publish_release:
+        description: "Publish GitHub Release after build"
+        required: false
+        default: "true"
 
 permissions:
   contents: write
@@ -24,12 +32,15 @@ jobs:
     env:
       ALPINE_IMAGE_URL: https://dev.alpinelinux.org/~tomalok/alpine-cloud-images/v3.23/nocloud/x86_64/nocloud_alpine-3.23.4-x86_64-bios-cloudinit-r0.qcow2
       OVA_NAME: net-relay-alpine-x86_64.ova
-      QCOW2_NAME: net-relay-alpine-x86_64.qcow2.gz
+      OVA_MINIMAL_NAME: net-relay-alpine-x86_64-minimal.ova
       RAW_NAME: net-relay-alpine-x86_64.raw.img.gz
       INSTALLER_ARCHIVE_NAME: net_relay-main.tar.gz
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || 'main' }}
+      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata gnutls
+      TRIVY_VERSION: "0.71.0"
+      TRIVY_CHECKSUM: "30a3d22b23f88c233f1658f562fb477cae3b3e8b4761109d515b7698daf85814"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,13 +53,20 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.5"
+          go-version: "1.25.11"
           cache: false
 
       - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y qemu-utils libguestfs-tools tar gzip
+
+      - name: Install Trivy
+        run: |
+          curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -o trivy.tar.gz
+          printf '%s  trivy.tar.gz\n' "${TRIVY_CHECKSUM}" | sha256sum -c
+          tar -xzf trivy.tar.gz trivy
+          sudo install -m 0755 trivy /usr/local/bin/trivy
 
       - name: Build official NetBird relay binaries
         run: |
@@ -58,35 +76,71 @@ jobs:
           TARGET_OS=linux TARGET_ARCH=amd64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash relay/package-relay.sh
           TARGET_OS=linux TARGET_ARCH=arm64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash relay/package-relay.sh
 
+      - name: Scan relay source with govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          (cd .build/netbird && govulncheck ./relay)
+
       - name: Generate release metadata
         id: meta
         env:
           RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag || '' }}
+          RELEASE_CHANNEL_INPUT: ${{ github.event.inputs.release_channel || 'stable' }}
         run: |
+          release_channel="${RELEASE_CHANNEL_INPUT:-stable}"
+          case "${release_channel}" in
+            stable|test) ;;
+            *) echo "::error::release_channel must be stable or test"; exit 1 ;;
+          esac
+
           if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
             release_tag="${GITHUB_REF_NAME}"
+            case "${release_tag}" in
+              v0.*) release_channel="test" ;;
+              v1.*) release_channel="stable" ;;
+              *) echo "::error::Tag releases must use v0.* for test or v1.* for stable"; exit 1 ;;
+            esac
           elif [ -n "${RELEASE_TAG_INPUT}" ]; then
             release_tag="${RELEASE_TAG_INPUT}"
+            case "${release_tag}" in
+              v0.*) release_channel="test" ;;
+              v1.*) release_channel="stable" ;;
+              *) echo "::error::Release tag must use v0.* for test or v1.* for stable"; exit 1 ;;
+            esac
           else
             git fetch --tags --force
-            latest_patch="$(git tag -l 'v1.0.*' | sed -n 's/^v1\.0\.\([0-9][0-9]*\)$/\1/p' | sort -n | tail -1)"
-            if [ -z "${latest_patch}" ]; then
-              release_tag="v1.0.0"
+            if [ "${release_channel}" = "test" ]; then
+              tag_prefix="v0.1"
             else
-              release_tag="v1.0.$((latest_patch + 1))"
+              tag_prefix="v1.0"
+            fi
+            latest_patch="$(git tag -l "${tag_prefix}.*" | sed -n "s/^${tag_prefix//./\\.}\\.\\([0-9][0-9]*\\)$/\\1/p" | sort -n | tail -1)"
+            if [ -z "${latest_patch}" ]; then
+              release_tag="${tag_prefix}.0"
+            else
+              release_tag="${tag_prefix}.$((latest_patch + 1))"
             fi
           fi
 
-          case "${release_tag}" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "::error::Release tag must use semantic format, for example v1.0.0"; exit 1 ;;
-          esac
+          if [ "${release_channel}" = "test" ] && ! printf '%s' "${release_tag}" | grep -Eq '^v0\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Test releases must use v0.* semantic tags, for example v0.1.0"
+            exit 1
+          fi
+          if [ "${release_channel}" = "stable" ] && ! printf '%s' "${release_tag}" | grep -Eq '^v1\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Stable releases must use v1.* semantic tags, for example v1.0.0"
+            exit 1
+          fi
+
+          prerelease="false"
+          [ "${release_channel}" = "test" ] && prerelease="true"
 
           root_password="Net@rels2026"
           ssh_port="$(python3 -c "import secrets; print(secrets.randbelow(45536) + 20000)")"
 
           {
             echo "release_tag=${release_tag}"
+            echo "release_channel=${release_channel}"
+            echo "prerelease=${prerelease}"
             echo "root_password=${root_password}"
             echo "ssh_port=${ssh_port}"
             echo "update_note=$(git log -1 --pretty=%s)"
@@ -99,6 +153,7 @@ jobs:
           cp -a relay setup-relay.sh install.sh main.sh README.md .gitignore .gitattributes ova-build/netbird-relay-installer/
           tar -xzf "release/${RELAY_AMD64_PACKAGE}" -C ova-build/relay-package
           git archive --format=tar.gz --prefix=net_relay-main/ HEAD -o "release/${INSTALLER_ARCHIVE_NAME}"
+          cp main.sh release/main.sh
           cp install.sh release/install.sh
 
       - name: Download Alpine cloud image
@@ -109,6 +164,14 @@ jobs:
           run
           resize2fs /dev/sda
           EOF
+
+      - name: Fetch Alpine OVA runtime packages
+        run: |
+          mkdir -p ova-build/apks
+          docker run --rm \
+            -v "$PWD/ova-build/apks:/apks" \
+            alpine:3.23 \
+            sh -ec "apk update && cd /apks && apk fetch --recursive ${OVA_APK_PACKAGES}"
 
       - name: Customize Alpine OVA image
         env:
@@ -123,7 +186,10 @@ jobs:
             --mkdir /usr/local/sbin \
             --mkdir /etc/init.d \
             --mkdir /etc/ssh \
+            --mkdir /etc/profile.d \
+            --mkdir /etc/modules-load.d \
             --mkdir /etc/sysctl.d \
+            --copy-in ova-build/apks:/tmp \
             --copy-in ova-build/relay-package/netbird-relay/bin/netbird-relay:/usr/local/bin \
             --copy-in ova-build/relay-package/netbird-relay/services/netbird-relay.openrc:/etc/init.d \
             --copy-in ova-build/netbird-relay-installer:/opt \
@@ -134,13 +200,21 @@ jobs:
             --copy-in ova/files/setup-zram:/usr/local/sbin \
             --copy-in ova/files/setup-kernel-tuning:/usr/local/sbin \
             --copy-in ova/files/sshd_config:/etc/ssh \
+            --copy-in ova/files/00-net-relay-locale.sh:/etc/profile.d \
+            --copy-in ova/files/virtio-modules.conf:/etc/modules-load.d \
             --copy-in ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --copy-in ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in ova/files/root-profile:/root \
+            --run-command "apk add --no-network --allow-untrusted --upgrade /tmp/apks/*.apk && rm -rf /tmp/apks" \
+            --run-command "ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && printf '%s\n' 'Asia/Shanghai' > /etc/timezone" \
+            --run-command "chmod 0644 /etc/profile.d/00-net-relay-locale.sh" \
             --run-command "chage -d 0 root || passwd -e root || true" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
             --run-command "chmod +x /usr/local/bin/netbird-relay /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /usr/local/sbin/setup-root-resize /usr/local/sbin/setup-network-check /usr/local/sbin/setup-zram /usr/local/sbin/setup-kernel-tuning /opt/netbird-relay-installer/setup-relay.sh" \
+            --run-command "ln -sf /usr/local/sbin/rels /usr/local/bin/rels" \
+            --run-command "setup-cloud-init" \
+            --run-command "rc-update add qemu-guest-agent default || true" \
             --run-command "chmod +x /etc/init.d/netbird-relay.openrc && mv /etc/init.d/netbird-relay.openrc /etc/init.d/netbird-relay" \
             --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile" 2>&1 | tee ova-build/virt-customize.log
           status="${PIPESTATUS[0]}"
@@ -156,7 +230,10 @@ jobs:
         run: |
           qemu-img convert -p -O vmdk -o subformat=streamOptimized,adapter_type=lsilogic ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vmdk
           vmdk_size="$(stat -c%s release/net-relay-alpine-x86_64.vmdk)"
-          cat > release/net-relay-alpine-x86_64.ovf <<EOF
+          write_ovf() {
+            local ovf_path="$1"
+            local network_connection="$2"
+            cat > "$ovf_path" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1" xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" xmlns:vmw="http://www.vmware.com/schema/ovf">
             <References>
@@ -179,27 +256,108 @@ jobs:
                 <Item><rasd:Description>1 virtual CPU</rasd:Description><rasd:ElementName>1 virtual CPU</rasd:ElementName><rasd:InstanceID>1</rasd:InstanceID><rasd:ResourceType>3</rasd:ResourceType><rasd:VirtualQuantity>1</rasd:VirtualQuantity></Item>
                 <Item><rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits><rasd:Description>1024MB memory</rasd:Description><rasd:ElementName>1024MB memory</rasd:ElementName><rasd:InstanceID>2</rasd:InstanceID><rasd:ResourceType>4</rasd:ResourceType><rasd:VirtualQuantity>1024</rasd:VirtualQuantity></Item>
                 <Item><rasd:Description>SCSI Controller</rasd:Description><rasd:ElementName>SCSI Controller 0</rasd:ElementName><rasd:InstanceID>3</rasd:InstanceID><rasd:ResourceSubType>lsilogic</rasd:ResourceSubType><rasd:ResourceType>6</rasd:ResourceType></Item>
-                <Item><rasd:AddressOnParent>0</rasd:AddressOnParent><rasd:Description>E1000 network adapter</rasd:Description><rasd:ElementName>Ethernet 1</rasd:ElementName><rasd:InstanceID>4</rasd:InstanceID><rasd:ResourceSubType>E1000</rasd:ResourceSubType><rasd:ResourceType>10</rasd:ResourceType></Item>
+                <Item><rasd:AddressOnParent>0</rasd:AddressOnParent>${network_connection}<rasd:Description>E1000 network adapter</rasd:Description><rasd:ElementName>Ethernet 1</rasd:ElementName><rasd:InstanceID>4</rasd:InstanceID><rasd:ResourceSubType>E1000</rasd:ResourceSubType><rasd:ResourceType>10</rasd:ResourceType></Item>
                 <Item><rasd:Description>Disk</rasd:Description><rasd:ElementName>Disk 1</rasd:ElementName><rasd:HostResource>ovf:/disk/disk1</rasd:HostResource><rasd:InstanceID>5</rasd:InstanceID><rasd:Parent>3</rasd:Parent><rasd:ResourceType>17</rasd:ResourceType></Item>
               </VirtualHardwareSection>
             </VirtualSystem>
           </Envelope>
           EOF
+          }
+          write_ovf release/net-relay-alpine-x86_64.ovf '<rasd:Connection>VM Network</rasd:Connection>'
+          write_ovf release/net-relay-alpine-x86_64-minimal.ovf ''
           tar -C release -cf "release/${OVA_NAME}" net-relay-alpine-x86_64.ovf net-relay-alpine-x86_64.vmdk
-          qemu-img convert -p -O qcow2 -c ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.qcow2
-          gzip -9 release/net-relay-alpine-x86_64.qcow2
+          tar -C release -cf "release/${OVA_MINIMAL_NAME}" net-relay-alpine-x86_64-minimal.ovf net-relay-alpine-x86_64.vmdk
           qemu-img convert -p -O raw ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.raw.img
           gzip -9 release/net-relay-alpine-x86_64.raw.img
-          (cd release && sha256sum "$OVA_NAME" "$QCOW2_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" install.sh > SHA256SUMS)
+
+      - name: Scan release workspace with Trivy
+        run: |
+          mkdir -p ova-build/trivy-workspace
+          cp -a .github ova relay worker install.sh main.sh setup-relay.sh README.md LICENSE ova-build/trivy-workspace/
+          cp -a release ova-build/trivy-workspace/
+          trivy fs \
+            --scanners vuln,secret,misconfig \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --format json \
+            --output release/trivy-fs.json \
+            ova-build/trivy-workspace
+
+      - name: Scan Alpine rootfs with Trivy
+        env:
+          LIBGUESTFS_BACKEND: direct
+        run: |
+          mkdir -p ova-build/rootfs
+          cleanup_rootfs() {
+            rm -rf ova-build/rootfs
+          }
+          trap cleanup_rootfs EXIT
+          sudo virt-copy-out -a ova-build/alpine.qcow2 / ova-build/rootfs
+          sudo chown -R "$(id -u):$(id -g)" ova-build/rootfs
+          trivy rootfs \
+            --scanners vuln \
+            --pkg-types os \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 0 \
+            --format json \
+            --output release/trivy-rootfs.json \
+            ova-build/rootfs
+          if python3 -c 'import json,sys; data=json.load(open("release/trivy-rootfs.json")); sys.exit(0 if any(r.get("Vulnerabilities") for r in data.get("Results", [])) else 1)'; then
+            trivy rootfs \
+              --scanners vuln \
+              --pkg-types os \
+              --severity CRITICAL,HIGH \
+              --ignore-unfixed \
+              --exit-code 0 \
+              --format table \
+              ova-build/rootfs
+            exit 1
+          fi
+
+      - name: Generate release SBOM
+        run: |
+          trivy filesystem \
+            --format cyclonedx \
+            --output release/net-relay-sbom.cdx.json \
+            release
+          trivy sbom \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 1 \
+            release/net-relay-sbom.cdx.json
+          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh trivy-rootfs.json trivy-fs.json net-relay-sbom.cdx.json > SHA256SUMS)
 
       - name: Write release notes
         run: |
           cat > release/RELEASE_NOTES.md <<EOF
           # NetBird Relay ${{ steps.meta.outputs.release_tag }}
 
+          This release provides official NetBird Relay binaries built from the upstream NetBird source, plus ready-to-import OVA and RAW images.
+
+          ## Quick install
           \`\`\`bash
           curl -sSL https://rels.jinfei.org | sh
           \`\`\`
+
+          ## Release channel
+
+          - Channel: ${{ steps.meta.outputs.release_channel }}
+          - Test releases use v0.* tags; stable releases use v1.* tags.
+          - NetBird Relay upstream ref: ${NETBIRD_RELAY_REF}
+
+          ## Published assets
+
+          - ${RELAY_AMD64_PACKAGE}: Linux amd64 official relay binary package.
+          - ${RELAY_ARM64_PACKAGE}: Linux arm64 official relay binary package.
+          - ${OVA_NAME}: OVA with OVF network Connection for importers that require it.
+          - ${OVA_MINIMAL_NAME}: OVA without OVF network Connection for strict importers that reject it.
+          - ${RAW_NAME}: RAW image for cloud import workflows such as Aliyun custom images.
+          - main.sh: secure bootstrap script served by https://rels.jinfei.org.
+          - install.sh: one-click installer for Debian, Ubuntu, Rocky, Alma, and Alpine.
+          - SHA256SUMS: SHA256 checksums for all published artifacts.
+          - trivy-rootfs.json, trivy-fs.json, net-relay-sbom.cdx.json: vulnerability scan reports and CycloneDX SBOM.
 
           ## OVA access
 
@@ -209,42 +367,74 @@ jobs:
           - Login command: \`ssh -p ${{ steps.meta.outputs.ssh_port }} root@<OVA_IP>\`
           - First login will force a root password change before initialization continues.
 
-          NetBird Relay upstream ref:
-          - ${NETBIRD_RELAY_REF}
+          ## OVA initialization
 
-          本次更新：
-          - ${{ steps.meta.outputs.update_note }}
+          - Enables ZRAM swap and daily ZRAM compact maintenance.
+          - Applies the conservative NetBird Relay kernel tuning profile.
+          - Expands the root partition when the virtual disk has been resized.
+          - Runs DHCP and network preflight checks on first boot.
+          - Installs cloud-init, qemu-guest-agent, VirtIO support, xfsprogs, and btrfs-progs.
+          - Run \`rels\` and choose option 7 to view ZRAM and kernel optimization status.
+
+          ## Security and verification
+
+          - Relay service runs as the dedicated netbird-relay user in binary mode.
+          - Release build runs govulncheck and Trivy High/Critical gates before publishing.
+          - Verify downloaded artifacts with SHA256SUMS before production use.
+          - Update: ${{ steps.meta.outputs.update_note }}
           EOF
 
       - name: Publish release
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.publish_release != 'false' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ steps.meta.outputs.release_tag }}"
+          release_args=()
+          if [ "${{ steps.meta.outputs.prerelease }}" = "true" ]; then
+            release_args+=(--prerelease)
+          fi
           if [ "${GITHUB_REF_TYPE:-}" != "tag" ]; then
             git tag "$tag"
             git push origin "$tag"
           fi
           gh release create "$tag" \
             --title "$tag" \
+            "${release_args[@]}" \
             --notes-file release/RELEASE_NOTES.md \
             "release/${INSTALLER_ARCHIVE_NAME}" \
             "release/${OVA_NAME}" \
-            "release/${QCOW2_NAME}" \
+            "release/${OVA_MINIMAL_NAME}" \
             "release/${RAW_NAME}" \
             "release/${RELAY_AMD64_PACKAGE}" \
             "release/${RELAY_ARM64_PACKAGE}" \
+            "release/main.sh" \
             "release/install.sh" \
+            release/trivy-rootfs.json \
+            release/trivy-fs.json \
+            release/net-relay-sbom.cdx.json \
             release/SHA256SUMS
 
       - name: Keep only latest release
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.publish_release != 'false' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           keep_tag="${{ steps.meta.outputs.release_tag }}"
-          gh release list --limit 100 --json tagName,isDraft,isPrerelease,createdAt \
-            --jq '.[] | select(.tagName != "'"${keep_tag}"'") | select(.tagName | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) | .tagName' \
+          channel="${{ steps.meta.outputs.release_channel }}"
+          if [ "${channel}" = "test" ]; then
+            tag_prefix="v0."
+          else
+            tag_prefix="v1."
+          fi
+          gh release list --limit 100 --json tagName \
+            --jq '.[].tagName' \
             | while IFS= read -r old_tag; do
                 [ -n "$old_tag" ] || continue
+                [ "$old_tag" != "$keep_tag" ] || continue
+                case "$old_tag" in
+                  "${tag_prefix}"*.*) ;;
+                  *) continue ;;
+                esac
                 gh release delete "$old_tag" --yes --cleanup-tag
               done

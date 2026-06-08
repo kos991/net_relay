@@ -10,7 +10,7 @@ ZRAM_SETUP="/usr/local/sbin/setup-zram"
 KERNEL_TUNING="/usr/local/sbin/setup-kernel-tuning"
 
 fail() {
-  echo "error: $*" >&2
+  echo "Error: $*" >&2
   exit 1
 }
 
@@ -21,23 +21,25 @@ check_cmd() {
 check_disk_space() {
   local available_mb
   available_mb="$(df -Pm / | awk 'NR == 2 {print $4}')"
-  [[ "$available_mb" =~ ^[0-9]+$ ]] || fail "unable to check free space on /"
+  [[ "$available_mb" =~ ^[0-9]+$ ]] || fail "unable to check available space on /"
   (( available_mb >= 256 )) || fail "/ needs at least 256 MB free, current ${available_mb} MB"
 }
 
 run_preflight_checks() {
   echo "Running OVA boot preflight checks..."
-  [[ -d "$INSTALLER_DIR" ]] || fail "installer directory missing: ${INSTALLER_DIR}"
-  [[ -x "$BIN_PATH" ]] || fail "netbird-relay binary missing: ${BIN_PATH}"
-  [[ -x "$ROOT_RESIZE" ]] || fail "root resize script missing: ${ROOT_RESIZE}"
-  [[ -x "$NETWORK_CHECK" ]] || fail "network check script missing: ${NETWORK_CHECK}"
-  [[ -x "$ZRAM_SETUP" ]] || fail "zram setup script missing: ${ZRAM_SETUP}"
-  [[ -x "$KERNEL_TUNING" ]] || fail "kernel tuning script missing: ${KERNEL_TUNING}"
+  echo "[1/5] Environment preflight: checking installer, binary, and base commands..."
+  [[ -d "$INSTALLER_DIR" ]] || fail "installer directory is missing: ${INSTALLER_DIR}"
+  [[ -x "$BIN_PATH" ]] || fail "netbird-relay binary is missing: ${BIN_PATH}"
+  [[ -x "$ROOT_RESIZE" ]] || fail "root resize script is missing: ${ROOT_RESIZE}"
+  [[ -x "$NETWORK_CHECK" ]] || fail "network self-check script is missing: ${NETWORK_CHECK}"
+  [[ -x "$ZRAM_SETUP" ]] || fail "ZRAM script is missing: ${ZRAM_SETUP}"
+  [[ -x "$KERNEL_TUNING" ]] || fail "kernel tuning script is missing: ${KERNEL_TUNING}"
   check_cmd bash
   check_cmd curl
   check_cmd openssl
   check_disk_space
   echo "Preflight checks completed."
+  echo "[1/5] Environment preflight completed."
 }
 
 if [[ -f "$FLAG" ]]; then
@@ -47,29 +49,44 @@ fi
 clear || true
 cat <<'EOF'
 =================================================
-          NetBird Relay OVA firstboot
+          NetBird Relay OVA First Boot Wizard
 =================================================
 
 Default login:
 - User: root
 - SSH port: __SSH_PORT__
 
-Notes:
-- First login forces a root password change.
-- Firstboot checks the relay binary, disk space, network, ZRAM, and kernel tuning.
-- Run "rels" later to open the management menu.
-- Multi-node relay groups are supported; all nodes in a group must reuse the same secret.
+First boot steps:
+1. Environment preflight
+2. Root partition resize
+3. Network self-check
+4. ZRAM and kernel tuning
+5. Relay setup wizard
+
+Tips:
+- Run rels to open the management menu again after setup.
+- Multi-node Relay groups must reuse the same secret.
 =================================================
 EOF
 
 run_preflight_checks
-"$ROOT_RESIZE" || echo "warning: root resize failed, continuing Relay setup."
-"$NETWORK_CHECK" || echo "warning: network self-check failed, continuing Relay setup."
-"$ZRAM_SETUP" || echo "warning: ZRAM setup failed, continuing Relay setup."
-"$KERNEL_TUNING" || echo "warning: kernel tuning failed, continuing Relay setup."
+echo "[2/5] Root partition resize: trying to grow disk and filesystem..."
+"$ROOT_RESIZE" || echo "Warning: root partition resize failed; continuing Relay setup."
+echo "[2/5] Root partition resize finished."
+
+echo "[3/5] Network self-check: loading common virtual NIC modules and checking DHCP..."
+"$NETWORK_CHECK" || echo "Warning: network self-check failed; continuing Relay setup."
+echo "[3/5] Network self-check finished."
+
+echo "[4/5] ZRAM and kernel tuning: enabling compressed swap, maintenance, and safe sysctl profile..."
+"$ZRAM_SETUP" || echo "Warning: ZRAM initialization failed; continuing Relay setup."
+"$KERNEL_TUNING" || echo "Warning: kernel tuning failed; continuing Relay setup."
+echo "[4/5] ZRAM and kernel tuning finished."
 
 cd "$INSTALLER_DIR"
+echo "[5/5] Relay setup wizard: starting NetBird Relay configuration."
 bash ./setup-relay.sh
 
 mkdir -p "$(dirname "$FLAG")"
 touch "$FLAG"
+echo "First boot completed. Run rels to open the management menu again."

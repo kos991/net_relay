@@ -20,7 +20,7 @@ run_as_root() {
   elif command -v sudo >/dev/null 2>&1; then
     sudo "$@"
   else
-    fail "需要 root 权限安装 bash/curl。请使用 root 运行，或先安装 sudo 并授权当前用户。"
+    fail "Root privileges are required to install bash/curl. Run as root, or install sudo and grant access to the current user first."
   fi
 }
 
@@ -50,7 +50,7 @@ ensure_bootstrap_tools() {
       fi
       ;;
     *)
-      fail "无法自动安装 bash/curl。支持 Debian/Ubuntu/Rocky/Alma/Alpine。"
+      fail "Unable to install bash/curl automatically. Supported systems: Debian/Ubuntu/Rocky/Alma/Alpine."
       ;;
   esac
 }
@@ -59,7 +59,7 @@ download_file() {
   url="$1"
   output="$2"
 
-  log "正在下载安装入口：${url}"
+  log "Downloading installer entrypoint: ${url}"
   if command -v curl >/dev/null 2>&1; then
     curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 --retry 2 --retry-delay 2 "$url" -o "$output"
   elif command -v wget >/dev/null 2>&1; then
@@ -69,7 +69,7 @@ download_file() {
       wget --timeout=10 --tries=3 -O "$output" "$url"
     fi
   else
-    fail "需要安装 curl 或 wget 后再执行。"
+    fail "curl or wget must be installed before continuing."
   fi
 }
 
@@ -80,13 +80,13 @@ validate_install_url() {
       ;;
     https://*)
       if [ "$ALLOW_CUSTOM_INSTALL_URL" = "1" ]; then
-        log "警告：正在使用自定义 INSTALL_URL，请确认来源可信：$INSTALL_URL"
+        log "Warning: using custom INSTALL_URL. Make sure the source is trusted: $INSTALL_URL"
         return 0
       fi
       ;;
   esac
 
-  fail "INSTALL_URL 必须是受信任的 HTTPS 地址。如确需自定义，请设置 ALLOW_CUSTOM_INSTALL_URL=1。"
+  fail "INSTALL_URL must be a trusted HTTPS URL. Set ALLOW_CUSTOM_INSTALL_URL=1 only if you really need a custom source."
 }
 
 verify_install_sha256() {
@@ -102,10 +102,10 @@ verify_install_sha256() {
     expected_hash="$(awk '$2=="install.sh"{print $1; found=1} END{exit !found}' "$sums_file")"
     actual_hash="$(shasum -a 256 "$script_file" | awk '{print $1}')"
   else
-    fail "需要 sha256sum 或 shasum 校验 install.sh。"
+    fail "sha256sum or shasum is required to verify install.sh."
   fi
 
-  [ "$actual_hash" = "$expected_hash" ] || fail "install.sh SHA256 校验失败。"
+  [ "$actual_hash" = "$expected_hash" ] || fail "install.sh SHA256 verification failed."
 }
 
 ensure_bootstrap_tools
@@ -116,8 +116,8 @@ tmp_sums="$(mktemp)"
 trap 'rm -f "$tmp_file" "$tmp_sums"' 0 HUP INT TERM
 
 download_file "$INSTALL_URL" "$tmp_file" || {
-  log "下载失败：${INSTALL_URL}"
-  log "请检查安装入口是否可访问，或临时设置 INSTALL_URL 为可访问的 install.sh 地址。"
+  log "Download failed: ${INSTALL_URL}"
+  log "Check whether the installer entrypoint is reachable, or temporarily set INSTALL_URL to a reachable install.sh URL."
   exit 1
 }
 download_file "$(dirname "$INSTALL_URL")/SHA256SUMS" "$tmp_sums"

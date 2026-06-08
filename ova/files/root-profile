@@ -2,9 +2,9 @@ ROOT_PASSWORD_CONFIRM_FLAG="/var/lib/net-relay/root-password-confirmed"
 
 if [ -x /usr/local/sbin/net-relay-firstboot ] && [ ! -f /var/lib/net-relay/firstboot.done ]; then
   if [ ! -f "$ROOT_PASSWORD_CONFIRM_FLAG" ]; then
-    printf '%s\n' "First login requires changing the root password before OVA initialization."
+    printf '%s\n' "First login requires changing the root password before OVA initialization continues."
     if ! passwd root; then
-      printf '%s\n' "Password change failed. Please run 'passwd root' and log in again."
+      printf '%s\n' "Password change failed. Run 'passwd root' and log in again."
       return 1 2>/dev/null || exit 1
     fi
     mkdir -p "$(dirname "$ROOT_PASSWORD_CONFIRM_FLAG")"
