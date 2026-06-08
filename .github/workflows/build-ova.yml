@@ -38,7 +38,7 @@ jobs:
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || 'main' }}
-      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata
+      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata gnutls
       TRIVY_VERSION: "0.71.0"
       TRIVY_CHECKSUM: "30a3d22b23f88c233f1658f562fb477cae3b3e8b4761109d515b7698daf85814"
     steps:
