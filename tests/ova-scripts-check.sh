@@ -116,11 +116,19 @@ grep -q "net-relay-alpine-x86_64.qcow2.gz" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.raw.img.gz" "$BUILD_OVA"
 grep -q "SSH port:" "$BUILD_OVA"
 grep -q "ssh -p" "$BUILD_OVA"
-grep -q "apk add --no-cache bash" "$BUILD_OVA"
+grep -q "OVA_APK_PACKAGES" "$BUILD_OVA"
+grep -q "apk fetch --recursive" "$BUILD_OVA"
+grep -q "apk add --no-network --allow-untrusted" "$BUILD_OVA"
+grep -q "apk add --no-cache bash curl ca-certificates" "$MAIN"
+grep -q "ca-certificates" "$BUILD_OVA"
+grep -q "openssh-server" "$BUILD_OVA"
+grep -q "procps-ng" "$BUILD_OVA"
+grep -q "parted" "$BUILD_OVA"
 grep -q "xfsprogs" "$BUILD_OVA"
 grep -q "btrfs-progs" "$BUILD_OVA"
-if grep -q "virt-customize --no-network" "$BUILD_OVA"; then
-  echo "OVA customization must allow network access when installing Alpine runtime packages." >&2
+grep -q "virt-customize --no-network" "$BUILD_OVA"
+if grep -q "virt-customize --format qcow2" "$BUILD_OVA"; then
+  echo "OVA customization must not require libguestfs guest networking on GitHub runners." >&2
   exit 1
 fi
 grep -q "ln -sf /usr/local/sbin/rels /usr/local/bin/rels" "$BUILD_OVA"
