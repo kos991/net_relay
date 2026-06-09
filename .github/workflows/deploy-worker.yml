@@ -8,9 +8,9 @@ on:
         required: false
         default: "rels-worker"
       route:
-        description: "Cloudflare Worker route"
+        description: "Cloudflare Worker route; empty or none deploys without binding a route"
         required: false
-        default: "rels.jinfei.org/*"
+        default: ""
 
 permissions:
   contents: read
@@ -31,6 +31,11 @@ jobs:
         run: |
           npm install --global wrangler
           deploy_command=(deploy worker/rels-worker.js --name "${WORKER_NAME}" --compatibility-date 2026-06-08)
+          case "${ROUTE}" in
+            none|NONE|-)
+              ROUTE=""
+              ;;
+          esac
           if [ -n "${ROUTE}" ]; then
             deploy_command+=(--route "${ROUTE}")
           fi
