@@ -41,6 +41,11 @@ jobs:
       OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata gnutls
       TRIVY_VERSION: "0.71.0"
       TRIVY_CHECKSUM: "30a3d22b23f88c233f1658f562fb477cae3b3e8b4761109d515b7698daf85814"
+      R2_RELEASE_BASE: ${{ vars.R2_RELEASE_BASE || secrets.R2_RELEASE_BASE || '' }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || '' }}
+      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID || '' }}
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '' }}
+      CLOUDFLARE_R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET || secrets.CLOUDFLARE_R2_BUCKET || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -155,6 +160,27 @@ jobs:
           git archive --format=tar.gz --prefix=net_relay-main/ HEAD -o "release/${INSTALLER_ARCHIVE_NAME}"
           cp main.sh release/main.sh
           cp install.sh release/install.sh
+
+      - name: Inject R2 release base
+        run: |
+          if [ -z "${R2_RELEASE_BASE}" ]; then
+            echo "R2_RELEASE_BASE is not configured; release scripts will fall back to GitHub."
+            exit 0
+          fi
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          r2_base = os.environ["R2_RELEASE_BASE"].rstrip("/")
+          for name in (
+              "release/main.sh",
+              "release/install.sh",
+              "ova-build/netbird-relay-installer/main.sh",
+              "ova-build/netbird-relay-installer/install.sh",
+          ):
+              path = Path(name)
+              path.write_text(path.read_text(encoding="utf-8").replace("__R2_RELEASE_BASE__", r2_base), encoding="utf-8")
+          PY
 
       - name: Download Alpine cloud image
         run: |
@@ -330,7 +356,14 @@ jobs:
           (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh trivy-rootfs.json trivy-fs.json net-relay-sbom.cdx.json > SHA256SUMS)
 
       - name: Write release notes
+        env:
+          R2_RELEASE_BASE: ${{ env.R2_RELEASE_BASE }}
         run: |
+          if [ -n "${R2_RELEASE_BASE}" ]; then
+            quick_install_url="${R2_RELEASE_BASE%/}/main.sh"
+          else
+            quick_install_url="https://github.com/kos991/net_relay/releases/latest/download/main.sh"
+          fi
           cat > release/RELEASE_NOTES.md <<EOF
           # NetBird Relay ${{ steps.meta.outputs.release_tag }}
 
@@ -338,7 +371,7 @@ jobs:
 
           ## Quick install
           \`\`\`bash
-          curl -sSL https://rels.jinfei.org | sh
+          curl -sSL ${quick_install_url} | sh
           \`\`\`
 
           ## Release channel
@@ -383,6 +416,24 @@ jobs:
           - Verify downloaded artifacts with SHA256SUMS before production use.
           - Update: ${{ steps.meta.outputs.update_note }}
           EOF
+
+      - name: Sync release assets to Cloudflare R2
+        run: |
+          if [ -z "${R2_RELEASE_BASE}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID}" ] || [ -z "${CLOUDFLARE_R2_ACCESS_KEY_ID}" ] || [ -z "${CLOUDFLARE_R2_SECRET_ACCESS_KEY}" ] || [ -z "${CLOUDFLARE_R2_BUCKET}" ]; then
+            echo "Cloudflare R2 is not fully configured; skipping R2 asset sync."
+            exit 0
+          fi
+
+          python3 -m pip install --user --upgrade awscli
+          export PATH="${HOME}/.local/bin:${PATH}"
+          export AWS_ACCESS_KEY_ID="${CLOUDFLARE_R2_ACCESS_KEY_ID}"
+          export AWS_SECRET_ACCESS_KEY="${CLOUDFLARE_R2_SECRET_ACCESS_KEY}"
+          export AWS_DEFAULT_REGION="auto"
+          r2_endpoint="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          tag="${{ steps.meta.outputs.release_tag }}"
+
+          aws --endpoint-url "${r2_endpoint}" s3 sync release "s3://${CLOUDFLARE_R2_BUCKET}/latest" --delete
+          aws --endpoint-url "${r2_endpoint}" s3 sync release "s3://${CLOUDFLARE_R2_BUCKET}/releases/${tag}" --delete
 
       - name: Publish release
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.publish_release != 'false' }}

@@ -1,7 +1,7 @@
 # NetBird Relay 一键部署
 
 ```bash
-curl -sSL https://rels.jinfei.org | sh
+curl -sSL https://github.com/kos991/net_relay/releases/latest/download/main.sh | sh
 ```
 
 支持 Debian / Ubuntu / Rocky / Alma / Alpine。

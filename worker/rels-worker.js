@@ -1,7 +1,11 @@
 const RELEASE_BASE = "https://github.com/kos991/net_relay/releases/latest/download";
 
-async function proxyAsset(name, contentDisposition = true) {
-  const upstream = await fetch(`${RELEASE_BASE}/${name}`, {
+function getReleaseBase(env) {
+  return (env && env.R2_RELEASE_BASE ? env.R2_RELEASE_BASE : RELEASE_BASE).replace(/\/+$/, "");
+}
+
+async function proxyAsset(name, env, contentDisposition = true) {
+  const upstream = await fetch(`${getReleaseBase(env)}/${name}`, {
     headers: { "user-agent": "net-relay-worker" },
   });
 
@@ -30,20 +34,20 @@ async function proxyAsset(name, contentDisposition = true) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
 
     if (url.pathname === "/" || url.pathname === "/main.sh") {
-      return proxyAsset("main.sh", false);
+      return proxyAsset("main.sh", env, false);
     }
     if (url.pathname === "/install.sh") {
-      return proxyAsset("install.sh");
+      return proxyAsset("install.sh", env);
     }
     if (url.pathname === "/net_relay-main.tar.gz") {
-      return proxyAsset("net_relay-main.tar.gz");
+      return proxyAsset("net_relay-main.tar.gz", env);
     }
     if (url.pathname === "/SHA256SUMS") {
-      return proxyAsset("SHA256SUMS");
+      return proxyAsset("SHA256SUMS", env);
     }
 
     return new Response("Not found\n", {

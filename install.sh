@@ -2,7 +2,12 @@
 set -euo pipefail
 
 DEFAULT_RELEASE_BASE="https://github.com/kos991/net_relay/releases/latest/download"
-RELEASE_BASE="${RELEASE_BASE:-$DEFAULT_RELEASE_BASE}"
+DEFAULT_R2_RELEASE_BASE="${RELS_R2_RELEASE_BASE:-${R2_RELEASE_BASE:-__R2_RELEASE_BASE__}}"
+if [[ "$DEFAULT_R2_RELEASE_BASE" == "__R2_RELEASE_BASE__" ]]; then
+  DEFAULT_R2_RELEASE_BASE=""
+fi
+DEFAULT_RELEASE_BASES="${DEFAULT_RELEASE_BASES:-${DEFAULT_R2_RELEASE_BASE:+${DEFAULT_R2_RELEASE_BASE%/} }$DEFAULT_RELEASE_BASE}"
+RELEASE_BASE="${RELEASE_BASE:-}"
 ALLOW_CUSTOM_RELEASE_BASE="${ALLOW_CUSTOM_RELEASE_BASE:-0}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/netbird-relay-installer}"
 BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
@@ -158,13 +163,32 @@ detect_install_mode() {
 }
 
 validate_release_base() {
-  case "$RELEASE_BASE" in
+  local base release_base
+  if [[ -n "$RELEASE_BASE" ]]; then
+    release_base="$RELEASE_BASE"
+  else
+    release_base="$DEFAULT_RELEASE_BASES"
+  fi
+
+  for base in $release_base; do
+    validate_one_release_base "$base"
+  done
+}
+
+validate_one_release_base() {
+  local base="$1"
+
+  if [[ -n "$DEFAULT_R2_RELEASE_BASE" && "$base" == "${DEFAULT_R2_RELEASE_BASE%/}" ]]; then
+    return 0
+  fi
+
+  case "$base" in
     https://github.com/kos991/net_relay/releases/latest/download|https://github.com/kos991/net_relay/releases/download/*)
       return 0
       ;;
     https://*)
       if [[ "$ALLOW_CUSTOM_RELEASE_BASE" == "1" ]]; then
-        warn "$(msg custom_release_base "$RELEASE_BASE")"
+        warn "$(msg custom_release_base "$base")"
         return 0
       fi
       ;;
@@ -388,12 +412,35 @@ download_relay_package() {
   local arch="$1"
   local output_dir="$2"
   local package_name="netbird-relay-linux-${arch}.tar.gz"
+  local release_base
 
   mkdir -p "$output_dir"
-  download_file "${RELEASE_BASE}/${package_name}" "${output_dir}/${package_name}"
-  download_file "${RELEASE_BASE}/SHA256SUMS" "${output_dir}/SHA256SUMS"
-  verify_sha256 "${output_dir}/${package_name}" "${output_dir}/SHA256SUMS"
-  printf '%s' "${output_dir}/${package_name}"
+  if [[ -n "$RELEASE_BASE" ]]; then
+    download_relay_package_from_base "$RELEASE_BASE" "$package_name" "$output_dir"
+    printf '%s' "${output_dir}/${package_name}"
+    return 0
+  fi
+
+  for release_base in $DEFAULT_RELEASE_BASES; do
+    if download_relay_package_from_base "$release_base" "$package_name" "$output_dir"; then
+      printf '%s' "${output_dir}/${package_name}"
+      return 0
+    fi
+    warn "release base failed, trying next mirror: ${release_base}"
+  done
+
+  fail "Unable to download relay package from all release mirrors."
+}
+
+download_relay_package_from_base() {
+  local release_base="$1"
+  local package_name="$2"
+  local output_dir="$3"
+
+  rm -f "${output_dir}/${package_name}" "${output_dir}/SHA256SUMS"
+  download_file "${release_base}/${package_name}" "${output_dir}/${package_name}" || return 1
+  download_file "${release_base}/SHA256SUMS" "${output_dir}/SHA256SUMS" || return 1
+  verify_sha256 "${output_dir}/${package_name}" "${output_dir}/SHA256SUMS" || return 1
 }
 
 install_relay_binary() {

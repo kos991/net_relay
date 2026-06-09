@@ -23,8 +23,28 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy Cloudflare Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy worker/rels-worker.js --name "${{ github.event.inputs.worker_name }}" --route "${{ github.event.inputs.route }}" --compatibility-date 2026-06-08
+        env:
+          WORKER_NAME: ${{ github.event.inputs.worker_name }}
+          ROUTE: ${{ github.event.inputs.route }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npm install --global wrangler
+          deploy_command=(deploy worker/rels-worker.js --name "${WORKER_NAME}" --compatibility-date 2026-06-08)
+          if [ -n "${ROUTE}" ]; then
+            deploy_command+=(--route "${ROUTE}")
+          fi
+          wrangler "${deploy_command[@]}"
+
+      - name: Configure Worker R2 release base
+        env:
+          R2_RELEASE_BASE: ${{ vars.R2_RELEASE_BASE || secrets.R2_RELEASE_BASE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "${R2_RELEASE_BASE}" ]; then
+            echo "R2_RELEASE_BASE is not configured; Worker will proxy GitHub Release assets."
+            exit 0
+          fi
+          npm install --global wrangler
+          printf '%s' "${R2_RELEASE_BASE%/}" | wrangler secret put R2_RELEASE_BASE --name "${{ github.event.inputs.worker_name }}"
