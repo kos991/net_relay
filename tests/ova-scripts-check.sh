@@ -136,11 +136,17 @@ grep -q -- "--prerelease" "$BUILD_OVA"
 grep -q "tag_prefix" "$BUILD_OVA"
 grep -q "Build official NetBird relay binaries" "$BUILD_OVA"
 grep -q "OVA_NAME" "$BUILD_OVA"
-grep -q "OVA_MINIMAL_NAME" "$BUILD_OVA"
 grep -q "RAW_NAME" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.ova" "$BUILD_OVA"
-grep -q "net-relay-alpine-x86_64-minimal.ova" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.raw.img.gz" "$BUILD_OVA"
+if grep -Eq "OVA_MINIMAL_NAME|minimal\\.ova|minimal\\.ovf|net-relay-alpine-x86_64-minimal" "$BUILD_OVA"; then
+  echo "Do not build or publish minimal OVA variants." >&2
+  exit 1
+fi
+if grep -Eq 'gh release create(.|[[:space:]])*release/[^ ]+\\.ovf' "$BUILD_OVA"; then
+  echo "Do not publish standalone OVF files; OVF belongs inside the OVA only." >&2
+  exit 1
+fi
 grep -q "SSH port:" "$BUILD_OVA"
 grep -q "ssh -p" "$BUILD_OVA"
 grep -q "OVA_APK_PACKAGES" "$BUILD_OVA"
@@ -185,7 +191,6 @@ grep -q "Enables ZRAM swap" "$BUILD_OVA"
 grep -q "kernel tuning profile" "$BUILD_OVA"
 grep -q "AddressOnParent" "$BUILD_OVA"
 grep -q "rasd:Connection" "$BUILD_OVA"
-grep -q "write_ovf release/net-relay-alpine-x86_64-minimal.ovf ''" "$BUILD_OVA"
 grep -q "setup-root-resize" "$BUILD_OVA"
 grep -q "setup-network-check" "$BUILD_OVA"
 grep -q "setup-zram" "$BUILD_OVA"
@@ -471,8 +476,12 @@ grep -q "CRITICAL,HIGH" "$VALIDATE_WORKFLOW"
 
 grep -q "github.com/caddy-dns/cloudflare" "$CADDY_DOCKERFILE"
 grep -q "COPY --from=builder /usr/bin/caddy /usr/bin/caddy" "$CADDY_DOCKERFILE"
+grep -q "USER 65532:65532" "$CADDY_DOCKERFILE"
 grep -q "sync-relay-certs.sh" "$SYNC_DOCKERFILE"
 grep -q "curl" "$SYNC_DOCKERFILE"
+grep -q "USER 65532:65532" "$SYNC_DOCKERFILE"
+grep -q "DOCKER_SOCK_GID" "$SETUP"
+grep -q "group_add" "$SETUP"
 grep -q "RELAY_DOMAIN" "$SYNC_CERTS_SCRIPT"
 grep -q "/var/run/docker.sock" "$SYNC_CERTS_SCRIPT"
 grep -q "restart_relay" "$SYNC_CERTS_SCRIPT"
