@@ -18,6 +18,8 @@ CADDY_IMAGE="${CADDY_IMAGE:-${CADDY_IMAGE_DEFAULT}}"
 SYNC_IMAGE="${SYNC_IMAGE:-${SYNC_IMAGE_DEFAULT}}"
 SERVICE_USER="${SERVICE_USER:-netbird-relay}"
 SERVICE_GROUP="${SERVICE_GROUP:-netbird-relay}"
+COMPOSE_RUNTIME_UID="${COMPOSE_RUNTIME_UID:-65532}"
+COMPOSE_RUNTIME_GID="${COMPOSE_RUNTIME_GID:-65532}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -264,6 +266,29 @@ compose_cloudflare_certificate() {
   return 0
 }
 
+docker_sock_gid() {
+  local gid
+  gid="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || true)"
+  if [[ -z "$gid" ]]; then
+    gid="0"
+  fi
+  printf '%s' "$gid"
+}
+
+prepare_compose_runtime_dirs() {
+  if [[ "$DEPLOY_MODE" != "compose" ]]; then
+    return 0
+  fi
+
+  run_as_root mkdir -p "$CONFIG_DIR" "$CERT_DIR"
+  if [[ "$CERT_MODE" == "cloudflare" ]]; then
+    run_as_root mkdir -p "${CONFIG_DIR}/caddy-data" "${CONFIG_DIR}/caddy-config"
+    run_as_root chown -R "${COMPOSE_RUNTIME_UID}:${COMPOSE_RUNTIME_GID}" \
+      "$CERT_DIR" "${CONFIG_DIR}/caddy-data" "${CONFIG_DIR}/caddy-config"
+    run_as_root chmod 0750 "$CERT_DIR" "${CONFIG_DIR}/caddy-data" "${CONFIG_DIR}/caddy-config"
+  fi
+}
+
 select_certificate_mode() {
   local value=""
   while true; do
@@ -345,10 +370,11 @@ EOF
 }
 
 write_compose_file() {
-  local env_tmp stack_env_tmp compose_tmp
+  local env_tmp stack_env_tmp compose_tmp docker_gid
   env_tmp="$(mktemp)"
   stack_env_tmp="$(mktemp)"
   compose_tmp="$(mktemp)"
+  docker_gid="$(docker_sock_gid)"
 
   cat > "$env_tmp" <<EOF
 NB_LOG_LEVEL=info
@@ -366,6 +392,7 @@ EOF
 RELAY_DOMAIN=${RELAY_DOMAIN}
 ACME_EMAIL=${ACME_EMAIL:-}
 CF_API_TOKEN=${CF_API_TOKEN:-}
+DOCKER_SOCK_GID=${docker_gid}
 EOF
 
   if [[ "$CERT_MODE" == "cloudflare" ]]; then
@@ -393,6 +420,8 @@ services:
     image: ${SYNC_IMAGE}
     container_name: netbird-relay-cert-sync
     restart: unless-stopped
+    group_add:
+      - "${docker_gid}"
     environment:
       RELAY_DOMAIN: ${RELAY_DOMAIN}
       RELAY_CONTAINER_NAME: netbird-relay
@@ -435,7 +464,7 @@ services:
 EOF
   fi
 
-  run_as_root mkdir -p "$CONFIG_DIR"
+  prepare_compose_runtime_dirs
   run_as_root install -m 0600 "$env_tmp" "$COMPOSE_ENV_FILE"
   run_as_root install -m 0600 "$stack_env_tmp" "$COMPOSE_STACK_ENV_FILE"
   if [[ "$CERT_MODE" == "cloudflare" ]]; then
