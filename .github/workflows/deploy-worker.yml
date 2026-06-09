@@ -28,24 +28,9 @@ jobs:
           ROUTE: ${{ github.event.inputs.route }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET || secrets.CLOUDFLARE_R2_BUCKET }}
         run: |
           npm install --global wrangler
-          cat > worker/wrangler.jsonc <<EOF
-          {
-            "name": "${WORKER_NAME}",
-            "main": "rels-worker.js",
-            "compatibility_date": "2026-06-08",
-            "r2_buckets": [
-              {
-                "binding": "RELEASE_BUCKET",
-                "bucket_name": "${CLOUDFLARE_R2_BUCKET}"
-              }
-            ]
-          }
-          EOF
-
-          deploy_command=(deploy --config worker/wrangler.jsonc)
+          deploy_command=(deploy worker/rels-worker.js --name "${WORKER_NAME}" --compatibility-date 2026-06-08)
           case "${ROUTE}" in
             none|NONE|-)
               ROUTE=""
@@ -59,12 +44,19 @@ jobs:
       - name: Configure Worker R2 release base
         env:
           R2_RELEASE_BASE: ${{ vars.R2_RELEASE_BASE || secrets.R2_RELEASE_BASE }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET || secrets.CLOUDFLARE_R2_BUCKET }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [ -z "${R2_RELEASE_BASE}" ]; then
-            echo "R2_RELEASE_BASE is not configured; Worker will proxy GitHub Release assets."
+          if [ -z "${R2_RELEASE_BASE}" ] || [ -z "${CLOUDFLARE_R2_ACCESS_KEY_ID}" ] || [ -z "${CLOUDFLARE_R2_SECRET_ACCESS_KEY}" ] || [ -z "${CLOUDFLARE_R2_BUCKET}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID}" ]; then
+            echo "R2 Worker secrets are not fully configured; Worker will proxy GitHub Release assets."
             exit 0
           fi
           npm install --global wrangler
           printf '%s' "${R2_RELEASE_BASE%/}" | wrangler secret put R2_RELEASE_BASE --name "${{ github.event.inputs.worker_name }}"
+          printf '%s' "${CLOUDFLARE_R2_ACCESS_KEY_ID}" | wrangler secret put R2_ACCESS_KEY_ID --name "${{ github.event.inputs.worker_name }}"
+          printf '%s' "${CLOUDFLARE_R2_SECRET_ACCESS_KEY}" | wrangler secret put R2_SECRET_ACCESS_KEY --name "${{ github.event.inputs.worker_name }}"
+          printf '%s' "${CLOUDFLARE_R2_BUCKET}" | wrangler secret put R2_BUCKET --name "${{ github.event.inputs.worker_name }}"
+          printf '%s' "${CLOUDFLARE_ACCOUNT_ID}" | wrangler secret put R2_ACCOUNT_ID --name "${{ github.event.inputs.worker_name }}"
