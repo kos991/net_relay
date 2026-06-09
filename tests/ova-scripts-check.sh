@@ -449,6 +449,7 @@ grep -q "RELAY_DOMAIN" "$SYNC_CERTS_SCRIPT"
 grep -q "/var/run/docker.sock" "$SYNC_CERTS_SCRIPT"
 grep -q "restart_relay" "$SYNC_CERTS_SCRIPT"
 grep -q "FROM netbirdio/relay:latest" "$RELAY_DOCKERFILE"
+grep -q "USER 65532:65532" "$RELAY_DOCKERFILE"
 
 if [[ -e "${ROOT_DIR}/.github/workflows/sync-acr-relay-image.yml" ]]; then
   echo "relay image must be built by Aliyun ACR from relay/Dockerfile, not synced by GitHub Actions." >&2
