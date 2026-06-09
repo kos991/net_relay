@@ -32,7 +32,6 @@ jobs:
     env:
       ALPINE_IMAGE_URL: https://dev.alpinelinux.org/~tomalok/alpine-cloud-images/v3.23/nocloud/x86_64/nocloud_alpine-3.23.4-x86_64-bios-cloudinit-r0.qcow2
       OVA_NAME: net-relay-alpine-x86_64.ova
-      OVA_MINIMAL_NAME: net-relay-alpine-x86_64-minimal.ova
       RAW_NAME: net-relay-alpine-x86_64.raw.img.gz
       INSTALLER_ARCHIVE_NAME: net_relay-main.tar.gz
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
@@ -316,9 +315,7 @@ jobs:
           EOF
           }
           write_ovf release/net-relay-alpine-x86_64.ovf '<rasd:Connection>VM Network</rasd:Connection>'
-          write_ovf release/net-relay-alpine-x86_64-minimal.ovf ''
           tar -C release -cf "release/${OVA_NAME}" net-relay-alpine-x86_64.ovf net-relay-alpine-x86_64.vmdk
-          tar -C release -cf "release/${OVA_MINIMAL_NAME}" net-relay-alpine-x86_64-minimal.ovf net-relay-alpine-x86_64.vmdk
           qemu-img convert -p -O raw ova-build/net-relay-alpine.qcow2 release/net-relay-alpine-x86_64.raw.img
           gzip -9 release/net-relay-alpine-x86_64.raw.img
 
@@ -436,7 +433,7 @@ jobs:
             --ignore-unfixed \
             --exit-code 1 \
             release/net-relay-sbom.cdx.json
-          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh trivy-rootfs.json trivy-fs.json net-relay-sbom.cdx.json > SHA256SUMS)
+          (cd release && sha256sum "$OVA_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh trivy-rootfs.json trivy-fs.json net-relay-sbom.cdx.json > SHA256SUMS)
 
       - name: Write release notes
         env:
@@ -468,7 +465,6 @@ jobs:
           - ${RELAY_AMD64_PACKAGE}: Linux amd64 official relay binary package.
           - ${RELAY_ARM64_PACKAGE}: Linux arm64 official relay binary package.
           - ${OVA_NAME}: OVA with OVF network Connection for importers that require it.
-          - ${OVA_MINIMAL_NAME}: OVA without OVF network Connection for strict importers that reject it.
           - ${RAW_NAME}: RAW image for cloud import workflows such as Aliyun custom images.
           - main.sh: secure bootstrap script served by https://rels.jinfei.org.
           - install.sh: one-click installer for Debian, Ubuntu, Rocky, Alma, and Alpine.
@@ -538,7 +534,6 @@ jobs:
             --notes-file release/RELEASE_NOTES.md \
             "release/${INSTALLER_ARCHIVE_NAME}" \
             "release/${OVA_NAME}" \
-            "release/${OVA_MINIMAL_NAME}" \
             "release/${RAW_NAME}" \
             "release/${RELAY_AMD64_PACKAGE}" \
             "release/${RELAY_ARM64_PACKAGE}" \
