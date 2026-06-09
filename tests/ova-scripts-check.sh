@@ -378,10 +378,15 @@ grep -q 'proxyAsset("main.sh", env, false)' "$WORKER"
 grep -q 'proxyAsset("install.sh", env)' "$WORKER"
 grep -q "getReleaseBase" "$WORKER"
 grep -q "env.R2_RELEASE_BASE" "$WORKER"
+grep -q "RELEASE_BUCKET" "$WORKER"
+grep -q "latest/main.sh" "$WORKER"
+grep -q "releases/" "$WORKER"
 grep -q "R2_RELEASE_BASE" "$DEPLOY_WORKER"
 grep -q "wrangler secret put R2_RELEASE_BASE" "$DEPLOY_WORKER"
 grep -q "deploy_command" "$DEPLOY_WORKER"
 grep -q 'if \[ -n "${ROUTE}" \]' "$DEPLOY_WORKER"
+grep -q "r2_buckets" "$DEPLOY_WORKER"
+grep -q "CLOUDFLARE_R2_BUCKET" "$DEPLOY_WORKER"
 if grep -q "MAIN_SH =" "$WORKER"; then
   echo "Worker must proxy release/main.sh instead of embedding a stale bootstrap script." >&2
   exit 1
