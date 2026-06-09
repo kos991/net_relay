@@ -38,7 +38,7 @@ jobs:
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || 'main' }}
-      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata gnutls
+      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata gnutls syslinux
       TRIVY_VERSION: "0.71.0"
       TRIVY_CHECKSUM: "30a3d22b23f88c233f1658f562fb477cae3b3e8b4761109d515b7698daf85814"
       R2_RELEASE_BASE: ${{ vars.R2_RELEASE_BASE || secrets.R2_RELEASE_BASE || '' }}
@@ -85,7 +85,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-utils libguestfs-tools tar gzip
+          sudo apt-get install -y qemu-utils qemu-system-x86 libguestfs-tools tar gzip
 
       - name: Install Trivy
         run: |
@@ -206,11 +206,14 @@ jobs:
       - name: Download Alpine cloud image
         run: |
           curl -fsSL "$ALPINE_IMAGE_URL" -o ova-build/alpine.qcow2
-          qemu-img resize ova-build/alpine.qcow2 3G
-          sudo guestfish --rw -a ova-build/alpine.qcow2 <<'EOF'
+          qemu-img create -f qcow2 ova-build/net-relay-alpine.qcow2 3G
+          sudo guestfish --rw -a ova-build/alpine.qcow2 -a ova-build/net-relay-alpine.qcow2 <<'EOF'
           run
-          resize2fs /dev/sda
+          part-init /dev/sdb mbr
+          part-add /dev/sdb p 2048 -2048
+          part-set-bootable /dev/sdb 1 true
           EOF
+          virt-resize --expand /dev/sda ova-build/alpine.qcow2 ova-build/net-relay-alpine.qcow2
 
       - name: Fetch Alpine OVA runtime packages
         run: |
@@ -227,7 +230,7 @@ jobs:
           SSH_PORT: ${{ steps.meta.outputs.ssh_port }}
         run: |
           set +e
-          sudo -E virt-customize --no-network --format qcow2 -a ova-build/alpine.qcow2 \
+          sudo -E virt-customize --no-network --format qcow2 -a ova-build/net-relay-alpine.qcow2 \
             --root-password "password:${ROOT_PASSWORD}" \
             --mkdir /usr/local/bin \
             --mkdir /usr/local/sbin \
@@ -246,6 +249,7 @@ jobs:
             --copy-in ova/files/setup-network-check:/usr/local/sbin \
             --copy-in ova/files/setup-zram:/usr/local/sbin \
             --copy-in ova/files/setup-kernel-tuning:/usr/local/sbin \
+            --copy-in ova/files/setup-bootloader:/usr/local/sbin \
             --copy-in ova/files/sshd_config:/etc/ssh \
             --copy-in ova/files/00-net-relay-locale.sh:/etc/profile.d \
             --copy-in ova/files/virtio-modules.conf:/etc/modules-load.d \
@@ -258,8 +262,9 @@ jobs:
             --run-command "chage -d 0 root || passwd -e root || true" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
-            --run-command "chmod +x /usr/local/bin/netbird-relay /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /usr/local/sbin/setup-root-resize /usr/local/sbin/setup-network-check /usr/local/sbin/setup-zram /usr/local/sbin/setup-kernel-tuning /opt/netbird-relay-installer/setup-relay.sh" \
+            --run-command "chmod +x /usr/local/bin/netbird-relay /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /usr/local/sbin/setup-root-resize /usr/local/sbin/setup-network-check /usr/local/sbin/setup-zram /usr/local/sbin/setup-kernel-tuning /usr/local/sbin/setup-bootloader /opt/netbird-relay-installer/setup-relay.sh" \
             --run-command "ln -sf /usr/local/sbin/rels /usr/local/bin/rels" \
+            --run-command "setup-bootloader /dev/sda1 /dev/sda" \
             --run-command "setup-cloud-init" \
             --run-command "rc-update add qemu-guest-agent default || true" \
             --run-command "chmod +x /etc/init.d/netbird-relay.openrc && mv /etc/init.d/netbird-relay.openrc /etc/init.d/netbird-relay" \
@@ -275,7 +280,7 @@ jobs:
 
       - name: Package OVA release images
         run: |
-          qemu-img convert -p -O vmdk -o subformat=streamOptimized,adapter_type=lsilogic ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vmdk
+          qemu-img convert -p -O vmdk -o subformat=streamOptimized,adapter_type=lsilogic ova-build/net-relay-alpine.qcow2 release/net-relay-alpine-x86_64.vmdk
           vmdk_size="$(stat -c%s release/net-relay-alpine-x86_64.vmdk)"
           write_ovf() {
             local ovf_path="$1"
@@ -314,8 +319,37 @@ jobs:
           write_ovf release/net-relay-alpine-x86_64-minimal.ovf ''
           tar -C release -cf "release/${OVA_NAME}" net-relay-alpine-x86_64.ovf net-relay-alpine-x86_64.vmdk
           tar -C release -cf "release/${OVA_MINIMAL_NAME}" net-relay-alpine-x86_64-minimal.ovf net-relay-alpine-x86_64.vmdk
-          qemu-img convert -p -O raw ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.raw.img
+          qemu-img convert -p -O raw ova-build/net-relay-alpine.qcow2 release/net-relay-alpine-x86_64.raw.img
           gzip -9 release/net-relay-alpine-x86_64.raw.img
+
+      - name: Verify RAW BIOS bootability
+        run: |
+          gzip -cd "release/${RAW_NAME}" > ova-build/raw-boot-test.img
+          qemu-system-x86_64 \
+            -machine pc \
+            -m 512 \
+            -drive file=ova-build/raw-boot-test.img,format=raw,if=virtio \
+            -serial file:ova-build/raw-boot.log \
+            -display none \
+            -no-reboot \
+            -snapshot \
+            -pidfile ova-build/qemu.pid &
+          qemu_pid="$!"
+          for _ in $(seq 1 60); do
+            if grep -Eq "Welcome to Alpine|login:" ova-build/raw-boot.log 2>/dev/null; then
+              kill "$qemu_pid" || true
+              wait "$qemu_pid" || true
+              exit 0
+            fi
+            if grep -Eq "No bootable device|Boot failed" ova-build/raw-boot.log 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          kill "$qemu_pid" || true
+          wait "$qemu_pid" || true
+          tail -n 120 ova-build/raw-boot.log || true
+          exit 1
 
       - name: Scan release workspace with Trivy
         run: |
@@ -368,7 +402,7 @@ jobs:
             rm -rf ova-build/rootfs
           }
           trap cleanup_rootfs EXIT
-          sudo virt-copy-out -a ova-build/alpine.qcow2 / ova-build/rootfs
+          sudo virt-copy-out -a ova-build/net-relay-alpine.qcow2 / ova-build/rootfs
           sudo chown -R "$(id -u):$(id -g)" ova-build/rootfs
           trivy rootfs \
             --scanners vuln \
