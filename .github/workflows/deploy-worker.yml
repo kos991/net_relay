@@ -11,6 +11,10 @@ on:
         description: "Cloudflare Worker route; empty or none deploys without binding a route"
         required: false
         default: ""
+      zone_name:
+        description: "Optional Cloudflare DNS zone name used to create the Worker hostname record"
+        required: false
+        default: "jinfei.org"
 
 permissions:
   contents: read
@@ -60,3 +64,66 @@ jobs:
           printf '%s' "${CLOUDFLARE_R2_SECRET_ACCESS_KEY}" | wrangler secret put R2_SECRET_ACCESS_KEY --name "${{ github.event.inputs.worker_name }}"
           printf '%s' "${CLOUDFLARE_R2_BUCKET}" | wrangler secret put R2_BUCKET --name "${{ github.event.inputs.worker_name }}"
           printf '%s' "${CLOUDFLARE_ACCOUNT_ID}" | wrangler secret put R2_ACCOUNT_ID --name "${{ github.event.inputs.worker_name }}"
+
+      - name: Ensure Worker DNS record
+        env:
+          ROUTE: ${{ github.event.inputs.route }}
+          ZONE_NAME: ${{ github.event.inputs.zone_name }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          case "${ROUTE}" in
+            ""|none|NONE|-)
+              echo "No route configured; skipping DNS record."
+              exit 0
+              ;;
+          esac
+
+          hostname="${ROUTE%%/*}"
+          if [ -z "${hostname}" ] || [ -z "${ZONE_NAME}" ]; then
+            echo "No hostname or zone name configured; skipping DNS record."
+            exit 0
+          fi
+
+          zone_id="$(curl -fsSL \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/zones?name=${ZONE_NAME}&account.id=${CLOUDFLARE_ACCOUNT_ID}" \
+            | python3 -c 'import json,sys; data=json.load(sys.stdin); result=data.get("result") or []; print(result[0]["id"] if result else "")')"
+          if [ -z "${zone_id}" ]; then
+            echo "::error::Cloudflare zone not found or token cannot read zones: ${ZONE_NAME}"
+            exit 1
+          fi
+
+          record_id="$(curl -fsSL \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?type=CNAME&name=${hostname}" \
+            | python3 -c 'import json,sys; data=json.load(sys.stdin); result=data.get("result") or []; print(result[0]["id"] if result else "")')"
+          payload="$(python3 - <<PY
+          import json
+          print(json.dumps({
+              "type": "CNAME",
+              "name": "${hostname}",
+              "content": "workers.dev",
+              "ttl": 1,
+              "proxied": True,
+          }))
+          PY
+          )"
+
+          if [ -n "${record_id}" ]; then
+            method="PUT"
+            url="https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records/${record_id}"
+          else
+            method="POST"
+            url="https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records"
+          fi
+
+          curl -fsSL -X "${method}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "${payload}" \
+            "${url}" \
+            | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data.get("success"), data; print("DNS record ready")'
