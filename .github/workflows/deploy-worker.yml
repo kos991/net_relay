@@ -93,22 +93,52 @@ jobs:
 
           zone_id="${ZONE_ID:-}"
           if [ -z "${zone_id}" ]; then
-            zone_id="$(curl -fsSL \
+            zone_lookup_response="$(mktemp)"
+            zone_lookup_http="$(curl -sS -o "${zone_lookup_response}" -w '%{http_code}' \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               -H "Content-Type: application/json" \
-              "https://api.cloudflare.com/client/v4/zones?name=${ZONE_NAME}" \
-              | python3 -c 'import json,sys; data=json.load(sys.stdin); result=data.get("result") or []; print(result[0]["id"] if result else "")')"
+              "https://api.cloudflare.com/client/v4/zones?name=${ZONE_NAME}")"
+            if [ "${zone_lookup_http#2}" = "${zone_lookup_http}" ]; then
+              python3 - "${zone_lookup_response}" "${zone_lookup_http}" <<'PY'
+          import json
+          import sys
+          path, status = sys.argv[1], sys.argv[2]
+          try:
+              data = json.load(open(path, encoding="utf-8"))
+          except Exception:
+              data = {}
+          errors = data.get("errors") or [{"message": "Cloudflare returned a non-JSON error body"}]
+          print(f"::error::Cloudflare zone lookup failed with HTTP {status}: {errors}")
+          PY
+              exit 1
+            fi
+            zone_id="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1])); result=data.get("result") or []; print(result[0]["id"] if result else "")' "${zone_lookup_response}")"
           fi
           if [ -z "${zone_id}" ]; then
             echo "::error::Cloudflare zone not found or token cannot read zones: ${ZONE_NAME}. Set CLOUDFLARE_ZONE_ID to avoid the zone-list API."
             exit 1
           fi
 
-          record_id="$(curl -fsSL \
+          record_lookup_response="$(mktemp)"
+          record_lookup_http="$(curl -sS -o "${record_lookup_response}" -w '%{http_code}' \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?type=CNAME&name=${hostname}" \
-            | python3 -c 'import json,sys; data=json.load(sys.stdin); result=data.get("result") or []; print(result[0]["id"] if result else "")')"
+            "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?type=CNAME&name=${hostname}")"
+          if [ "${record_lookup_http#2}" = "${record_lookup_http}" ]; then
+            python3 - "${record_lookup_response}" "${record_lookup_http}" <<'PY'
+          import json
+          import sys
+          path, status = sys.argv[1], sys.argv[2]
+          try:
+              data = json.load(open(path, encoding="utf-8"))
+          except Exception:
+              data = {}
+          errors = data.get("errors") or [{"message": "Cloudflare returned a non-JSON error body"}]
+          print(f"::error::Cloudflare DNS record lookup failed with HTTP {status}: {errors}")
+          PY
+            exit 1
+          fi
+          record_id="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1])); result=data.get("result") or []; print(result[0]["id"] if result else "")' "${record_lookup_response}")"
           payload="$(python3 - <<PY
           import json
           print(json.dumps({
@@ -129,9 +159,23 @@ jobs:
             url="https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records"
           fi
 
-          curl -fsSL -X "${method}" \
+          dns_write_response="$(mktemp)"
+          dns_write_http="$(curl -sS -o "${dns_write_response}" -w '%{http_code}' -X "${method}" \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" \
             --data "${payload}" \
-            "${url}" \
-            | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data.get("success"), data; print("DNS record ready")'
+            "${url}")"
+          python3 - "${dns_write_response}" "${dns_write_http}" <<'PY'
+          import json
+          import sys
+          path, status = sys.argv[1], sys.argv[2]
+          try:
+              data = json.load(open(path, encoding="utf-8"))
+          except Exception:
+              data = {}
+          if not status.startswith("2") or not data.get("success"):
+              errors = data.get("errors") or [{"message": "Cloudflare returned a non-JSON error body"}]
+              print(f"::error::Cloudflare DNS record write failed with HTTP {status}: {errors}")
+              sys.exit(1)
+          print("DNS record ready")
+          PY
