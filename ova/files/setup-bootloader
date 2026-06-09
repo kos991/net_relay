@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+root_device="${1:-/dev/sda1}"
+disk_device="${2:-/dev/sda}"
+
+uuid="$(blkid -s UUID -o value "$root_device")"
+kernel="$(find /boot -maxdepth 1 -type f -name 'vmlinuz-*' | sort | head -n 1)"
+initrd="$(find /boot -maxdepth 1 -type f -name 'initramfs-*' | sort | head -n 1)"
+
+if [ -z "$uuid" ] || [ -z "$kernel" ] || [ -z "$initrd" ]; then
+  echo "Unable to configure bootloader: missing root UUID, kernel, or initramfs" >&2
+  exit 1
+fi
+
+mkdir -p /boot/extlinux
+cat > /boot/extlinux/extlinux.conf <<EOF
+TIMEOUT 30
+PROMPT 0
+DEFAULT linux
+
+LABEL linux
+  KERNEL ${kernel}
+  INITRD ${initrd}
+  APPEND root=UUID=${uuid} modules=virtio_pci,virtio_blk,virtio_scsi,sd-mod,usb-storage,ext4 rootfstype=ext4 console=tty0 console=ttyS0,115200
+EOF
+
+extlinux --install /boot/extlinux
+
+mbr=""
+for candidate in /usr/share/syslinux/mbr.bin /usr/lib/syslinux/mbr/mbr.bin; do
+  if [ -r "$candidate" ]; then
+    mbr="$candidate"
+    break
+  fi
+done
+
+if [ -z "$mbr" ]; then
+  echo "Unable to configure bootloader: syslinux mbr.bin not found" >&2
+  exit 1
+fi
+
+dd if="$mbr" of="$disk_device" bs=440 count=1 conv=notrunc
