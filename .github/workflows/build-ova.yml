@@ -322,6 +322,7 @@ jobs:
           mkdir -p ova-build/trivy-workspace
           cp -a .github ova relay worker install.sh main.sh setup-relay.sh README.md LICENSE ova-build/trivy-workspace/
           cp -a release ova-build/trivy-workspace/
+          set +e
           trivy fs \
             --scanners vuln,secret,misconfig \
             --severity CRITICAL,HIGH \
@@ -330,6 +331,33 @@ jobs:
             --format json \
             --output release/trivy-fs.json \
             ova-build/trivy-workspace
+          status="$?"
+          set -e
+          if [ "$status" -ne 0 ]; then
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = Path("release/trivy-fs.json")
+          data = json.loads(report.read_text(encoding="utf-8"))
+          for result in data.get("Results", []):
+              target = result.get("Target", "")
+              for vuln in result.get("Vulnerabilities", []) or []:
+                  print(f"::error file={target}::{vuln.get('Severity')} {vuln.get('VulnerabilityID')} {vuln.get('PkgName')} {vuln.get('InstalledVersion')} -> {vuln.get('FixedVersion')}")
+              for secret in result.get("Secrets", []) or []:
+                  print(f"::error file={target},line={secret.get('StartLine', 1)}::SECRET {secret.get('RuleID')} {secret.get('Title')}")
+              for misconf in result.get("Misconfigurations", []) or []:
+                  print(f"::error file={target}::{misconf.get('Severity')} {misconf.get('ID')} {misconf.get('Title')}")
+          PY
+            exit "$status"
+          fi
+
+      - name: Upload release workspace Trivy report
+        if: ${{ failure() && hashFiles('release/trivy-fs.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-failure-report
+          path: release/trivy-fs.json
 
       - name: Scan Alpine rootfs with Trivy
         env:
