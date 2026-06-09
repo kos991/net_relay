@@ -24,8 +24,13 @@ LOGIN_CFG="${ROOT_DIR}/ova/files/99-net-relay-login.cfg"
 BUILD_OVA="${ROOT_DIR}/.github/workflows/build-ova.yml"
 VALIDATE_WORKFLOW="${ROOT_DIR}/.github/workflows/validate.yml"
 SYNC_OFFICIAL="${ROOT_DIR}/.github/workflows/sync-official-relay.yml"
+SYNC_ACR_RELAY="${ROOT_DIR}/.github/workflows/sync-acr-relay-image.yml"
 SYSCTL_CONF="${ROOT_DIR}/ova/files/99-net-relay-sysctl.conf"
 SSHD_CONFIG="${ROOT_DIR}/ova/files/sshd_config"
+CADDY_DOCKERFILE="${ROOT_DIR}/caddy/Dockerfile"
+SYNC_DOCKERFILE="${ROOT_DIR}/sync/Dockerfile"
+SYNC_CERTS_SCRIPT="${ROOT_DIR}/sync/sync-relay-certs.sh"
+RELAY_DOCKERFILE="${ROOT_DIR}/relay/Dockerfile"
 
 bash -n "$FIRSTBOOT"
 bash -n "$RELS"
@@ -33,6 +38,7 @@ bash -n "$SETUP"
 bash -n "$INSTALL"
 bash -n "$BUILD_RELAY"
 bash -n "$PACKAGE_RELAY"
+bash -n "$SYNC_CERTS_SCRIPT"
 bash -n "$ZRAM_SETUP"
 bash -n "$KERNEL_TUNING"
 bash -n "$ROOT_RESIZE"
@@ -92,7 +98,19 @@ grep -q "mask_secret" "$SETUP"
 grep -q "DEPLOY_MODE" "$SETUP"
 grep -q "write_compose_file" "$SETUP"
 grep -q "docker compose -f" "$SETUP"
-grep -q "netbirdio/relay" "$SETUP"
+grep -q "RELAY_IMAGE" "$SETUP"
+grep -q "CADDY_IMAGE" "$SETUP"
+grep -q "SYNC_IMAGE" "$SETUP"
+grep -q "COMPOSE_STACK_ENV_FILE" "$SETUP"
+grep -q "crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay" "$SETUP"
+grep -q "crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:caddy" "$SETUP"
+grep -q "crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:sync" "$SETUP"
+grep -q "netbird-caddy-cert" "$SETUP"
+grep -q "netbird-relay-cert-sync" "$SETUP"
+if grep -q "image: netbirdio/relay" "$SETUP"; then
+  echo "Compose mode must default to the Aliyun custom relay image, not Docker Hub netbirdio/relay." >&2
+  exit 1
+fi
 
 grep -q "root-password-confirmed" "$ROOT_PROFILE"
 grep -q "ROOT_PASSWORD_CONFIRM_FLAG" "$ROOT_PROFILE"
@@ -286,6 +304,23 @@ grep -q "install_relay_binary" "$INSTALL"
 grep -q "install_compose_dependencies" "$INSTALL"
 grep -q "INSTALL_MODE" "$INSTALL"
 grep -q "compose" "$INSTALL"
+grep -q "enforce_install_mode_policy" "$INSTALL"
+grep -q "Alpine uses official binary mode" "$INSTALL"
+awk '
+  /^main\(\) \{/ { in_main=1 }
+  in_main && /enforce_install_mode_policy/ { policy=NR }
+  in_main && /select_install_mode/ { menu=NR }
+  END {
+    if (!policy || !menu || policy > menu) {
+      print "Alpine policy must run before the install mode menu is shown." > "/dev/stderr"
+      exit 1
+    }
+  }
+' "$INSTALL"
+if grep -q "docker-cli-compose" "$INSTALL"; then
+  echo "Alpine installer must not install Docker Compose; Alpine uses binary mode only." >&2
+  exit 1
+fi
 grep -q "netbird-relay-linux-\${arch}.tar.gz" "$INSTALL"
 grep -q "VERSION_CODENAME" "$INSTALL"
 grep -q "ID_LIKE" "$INSTALL"
@@ -344,8 +379,8 @@ if grep -q "Relay auth secret: \${RELAY_AUTH_SECRET}" "$SETUP"; then
 fi
 
 if LC_ALL=C.UTF-8 grep -R -n "[一-龥]" \
-  "$FIRSTBOOT" "$RELS" "$ROOT_PROFILE" "$ZRAM_SETUP" "$KERNEL_TUNING" "$SETUP" "$INSTALL" "$MAIN" "$LOCALE_PROFILE"; then
-  echo "OVA and installer console output must be ASCII/English only." >&2
+  "$FIRSTBOOT" "$RELS" "$ROOT_PROFILE" "$ZRAM_SETUP" "$KERNEL_TUNING" "$SETUP" "$LOCALE_PROFILE"; then
+  echo "OVA console scripts must remain ASCII/English only." >&2
   exit 1
 fi
 
@@ -381,6 +416,31 @@ grep -q "trivy fs" "$VALIDATE_WORKFLOW"
 grep -q "Scan relay source with govulncheck" "$VALIDATE_WORKFLOW"
 grep -q "go install golang.org/x/vuln/cmd/govulncheck" "$VALIDATE_WORKFLOW"
 grep -q "CRITICAL,HIGH" "$VALIDATE_WORKFLOW"
+
+grep -q "name: sync-acr-relay-image" "$SYNC_ACR_RELAY"
+grep -q "schedule:" "$SYNC_ACR_RELAY"
+grep -q "workflow_dispatch:" "$SYNC_ACR_RELAY"
+grep -q "netbirdio/relay" "$SYNC_ACR_RELAY"
+grep -q "crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay" "$SYNC_ACR_RELAY"
+grep -q "ALIYUN_ACR_USERNAME" "$SYNC_ACR_RELAY"
+grep -q "ALIYUN_ACR_PASSWORD" "$SYNC_ACR_RELAY"
+grep -q "docker login" "$SYNC_ACR_RELAY"
+grep -q "docker pull" "$SYNC_ACR_RELAY"
+grep -q "docker tag" "$SYNC_ACR_RELAY"
+grep -q "docker push" "$SYNC_ACR_RELAY"
+grep -q "cosign sign" "$SYNC_ACR_RELAY"
+
+grep -q "github.com/caddy-dns/cloudflare" "$CADDY_DOCKERFILE"
+grep -q "COPY --from=builder /usr/bin/caddy /usr/bin/caddy" "$CADDY_DOCKERFILE"
+grep -q "sync-relay-certs.sh" "$SYNC_DOCKERFILE"
+grep -q "curl" "$SYNC_DOCKERFILE"
+grep -q "RELAY_DOMAIN" "$SYNC_CERTS_SCRIPT"
+grep -q "/var/run/docker.sock" "$SYNC_CERTS_SCRIPT"
+grep -q "restart_relay" "$SYNC_CERTS_SCRIPT"
+if [[ -e "$RELAY_DOCKERFILE" ]]; then
+  echo "relay/Dockerfile must not exist; the ACR relay image is synced from official netbirdio/relay by GitHub Actions." >&2
+  exit 1
+fi
 
 if grep -Eq "install_docker|docker-compose-plugin|docker-cli-compose|docker compose|docker-compose|netbirdio/relay" "$FIRSTBOOT" "$RELS" "$ZRAM_SETUP" "$KERNEL_TUNING" "$ROOT_RESIZE" "$NETWORK_CHECK"; then
   echo "OVA image scripts must not install or require Docker." >&2

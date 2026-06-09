@@ -1,0 +1,78 @@
+name: sync-acr-relay-image
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: "Official netbirdio/relay tag to sync"
+        required: false
+        default: "latest"
+      target_tag:
+        description: "Aliyun ACR target tag"
+        required: false
+        default: "relay"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_IMAGE: docker.io/netbirdio/relay
+      SOURCE_TAG: ${{ github.event.inputs.source_tag || 'latest' }}
+      ACR_REGISTRY: crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com
+      ACR_REPOSITORY: crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels
+      TARGET_TAG: ${{ github.event.inputs.target_tag || 'relay' }}
+      TARGET_IMAGE: crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay
+    steps:
+      - name: Validate image tags
+        run: |
+          case "${SOURCE_TAG}" in
+            *[!A-Za-z0-9_.-]*|"")
+              echo "::error::source_tag contains unsupported characters"
+              exit 1
+              ;;
+          esac
+          case "${TARGET_TAG}" in
+            *[!A-Za-z0-9_.-]*|"")
+              echo "::error::target_tag contains unsupported characters"
+              exit 1
+              ;;
+          esac
+
+      - name: Pull official relay image
+        run: |
+          docker pull "${SOURCE_IMAGE}:${SOURCE_TAG}"
+
+      - name: Login to Aliyun ACR
+        env:
+          ALIYUN_ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          ALIYUN_ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+        run: |
+          if [ -z "${ALIYUN_ACR_USERNAME}" ] || [ -z "${ALIYUN_ACR_PASSWORD}" ]; then
+            echo "::error::Missing ALIYUN_ACR_USERNAME or ALIYUN_ACR_PASSWORD repository secret"
+            exit 1
+          fi
+          printf '%s' "${ALIYUN_ACR_PASSWORD}" | docker login "${ACR_REGISTRY}" --username "${ALIYUN_ACR_USERNAME}" --password-stdin
+
+      - name: Push Aliyun relay image
+        run: |
+          if [ "${TARGET_TAG}" != "relay" ]; then
+            TARGET_IMAGE="${ACR_REPOSITORY}:${TARGET_TAG}"
+          fi
+          docker tag "${SOURCE_IMAGE}:${SOURCE_TAG}" "${TARGET_IMAGE}"
+          docker push "${TARGET_IMAGE}"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign Aliyun relay image
+        run: |
+          if [ "${TARGET_TAG}" != "relay" ]; then
+            TARGET_IMAGE="${ACR_REPOSITORY}:${TARGET_TAG}"
+          fi
+          cosign sign --yes "${TARGET_IMAGE}"

@@ -8,6 +8,7 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/netbird-relay-installer}"
 BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/netbird-relay}"
 INSTALL_MODE="${INSTALL_MODE:-}"
+RELS_LANG="${RELS_LANG:-}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -32,13 +33,105 @@ fail() {
   exit 1
 }
 
+is_zh() {
+  [[ "${RELS_LANG:-en}" == "zh" ]]
+}
+
+msg() {
+  local key="$1"
+  shift || true
+  if is_zh; then
+    case "$key" in
+      root_required) printf '%s' "需要 root 权限。请使用 root 运行，或先安装并配置 sudo。" ;;
+      unknown_arg) printf '未知参数：%s' "$1" ;;
+      bad_install_mode) printf '%s' "INSTALL_MODE 必须是 binary 或 compose。" ;;
+      custom_release_base) printf '正在使用自定义 RELEASE_BASE，请确认来源可信：%s' "$1" ;;
+      bad_release_base) printf '%s' "RELEASE_BASE 必须是受信任的 HTTPS 地址。如确需自定义来源，请设置 ALLOW_CUSTOM_RELEASE_BASE=1。" ;;
+      select_install_mode) printf '%s\n' "选择安装模式："; printf '%s\n' "  1. 官方二进制安装（推荐，无 Docker）"; printf '%s' "  2. Docker Compose" ;;
+      select_install_prompt) printf '%s' "选择安装模式 [1]: " ;;
+      read_install_mode_failed) printf '%s' "无法读取安装模式。" ;;
+      read_install_mode_noninteractive) printf '%s' "无法读取安装模式。非交互安装请设置 INSTALL_MODE=binary 或 INSTALL_MODE=compose。" ;;
+      enter_1_or_2) printf '%s' "请输入 1 或 2。" ;;
+      os_missing) printf '%s' "无法检测系统：缺少 /etc/os-release。支持 Debian/Ubuntu/Rocky/Alma/Alpine。" ;;
+      unsupported_os) printf '不支持的系统：%s。支持 Debian/Ubuntu/Rocky/Alma/Alpine。' "$1" ;;
+      unsupported_arch) printf '不支持的 CPU 架构：%s。支持 amd64/arm64。' "$1" ;;
+      compose_unavailable) printf '%s' "安装后仍无法使用 Docker Compose。" ;;
+      alpine_binary_only) printf '%s' "Alpine 使用官方二进制安装模式，不安装 Docker/Compose。" ;;
+      alpine_compose_disabled) printf '%s' "Alpine 不支持 Docker Compose 模式；请使用官方二进制安装模式。" ;;
+      downloading) printf '正在下载：%s' "$1" ;;
+      need_downloader) printf '%s' "需要 curl 或 wget。" ;;
+      hash_missing_warn) printf '%s' "未找到 sha256sum/shasum，跳过 SHA256 校验。" ;;
+      unsafe_path) printf '安装包包含不安全路径：%s' "$1" ;;
+      missing_binary) printf '%s' "安装包缺少 netbird-relay 二进制文件。" ;;
+      compose_wizard) printf '%s' "启动 Docker Compose 配置向导。" ;;
+      binary_installed) printf 'netbird-relay 二进制已安装：%s' "$1" ;;
+      binary_wizard) printf '%s' "启动二进制配置向导。" ;;
+    esac
+    return 0
+  fi
+
+  case "$key" in
+    root_required) printf '%s' "Root privileges are required. Run as root, or install and configure sudo first." ;;
+    unknown_arg) printf 'Unknown argument: %s' "$1" ;;
+    bad_install_mode) printf '%s' "INSTALL_MODE must be binary or compose." ;;
+    custom_release_base) printf 'Using custom RELEASE_BASE. Make sure the source is trusted: %s' "$1" ;;
+    bad_release_base) printf '%s' "RELEASE_BASE must be a trusted HTTPS URL. Set ALLOW_CUSTOM_RELEASE_BASE=1 only if you really need a custom source." ;;
+    select_install_mode) printf '%s\n' "Select install mode:"; printf '%s\n' "  1. Official binary install (recommended, no Docker)"; printf '%s' "  2. Docker Compose" ;;
+    select_install_prompt) printf '%s' "Select install mode [1]: " ;;
+    read_install_mode_failed) printf '%s' "Unable to read install mode." ;;
+    read_install_mode_noninteractive) printf '%s' "Unable to read install mode. For non-interactive installs, set INSTALL_MODE=binary or INSTALL_MODE=compose." ;;
+    enter_1_or_2) printf '%s' "Please enter 1 or 2." ;;
+    os_missing) printf '%s' "Unable to detect OS: /etc/os-release is missing. Supported systems: Debian/Ubuntu/Rocky/Alma/Alpine." ;;
+    unsupported_os) printf 'Unsupported OS: %s. Supported systems: Debian/Ubuntu/Rocky/Alma/Alpine.' "$1" ;;
+    unsupported_arch) printf 'Unsupported CPU architecture: %s. Supported architectures: amd64/arm64.' "$1" ;;
+    compose_unavailable) printf '%s' "Docker Compose is still unavailable after installation." ;;
+    alpine_binary_only) printf '%s' "Alpine uses official binary mode; Docker/Compose is not installed." ;;
+    alpine_compose_disabled) printf '%s' "Alpine does not support Docker Compose mode; use official binary mode instead." ;;
+    downloading) printf 'Downloading: %s' "$1" ;;
+    need_downloader) printf '%s' "curl or wget is required." ;;
+    hash_missing_warn) printf '%s' "sha256sum/shasum was not found; skipping SHA256 verification." ;;
+    unsafe_path) printf 'Package contains an unsafe path: %s' "$1" ;;
+    missing_binary) printf '%s' "Package is missing the netbird-relay binary." ;;
+    compose_wizard) printf '%s' "Starting Docker Compose setup wizard." ;;
+    binary_installed) printf 'netbird-relay binary installed: %s' "$1" ;;
+    binary_wizard) printf '%s' "Starting binary setup wizard." ;;
+  esac
+}
+
+select_language() {
+  local value=""
+  case "$RELS_LANG" in
+    zh|en) export RELS_LANG; return 0 ;;
+    "") ;;
+    *) RELS_LANG="" ;;
+  esac
+
+  cat >&2 <<'EOF'
+Select language / 选择语言:
+  1. 中文
+  2. English
+EOF
+  printf '%s' '请选择语言 / Select language [1]: ' >&2
+  if [[ -r /dev/tty ]]; then
+    IFS= read -r value </dev/tty || value=""
+  else
+    IFS= read -r value || value=""
+  fi
+
+  case "$value" in
+    2|en|EN|english|English) RELS_LANG="en" ;;
+    *) RELS_LANG="zh" ;;
+  esac
+  export RELS_LANG
+}
+
 run_as_root() {
   if [[ "${EUID}" -eq 0 ]]; then
     "$@"
   elif command -v sudo >/dev/null 2>&1; then
     sudo "$@"
   else
-    fail "Root privileges are required. Run as root, or install and configure sudo first."
+    fail "$(msg root_required)"
   fi
 }
 
@@ -52,7 +145,7 @@ detect_install_mode() {
         INSTALL_MODE="compose"
         ;;
       *)
-        fail "Unknown argument: $1"
+        fail "$(msg unknown_arg "$1")"
         ;;
     esac
     shift
@@ -60,7 +153,7 @@ detect_install_mode() {
 
   case "$INSTALL_MODE" in
     ""|binary|compose) ;;
-    *) fail "INSTALL_MODE must be binary or compose." ;;
+    *) fail "$(msg bad_install_mode)" ;;
   esac
 }
 
@@ -71,13 +164,13 @@ validate_release_base() {
       ;;
     https://*)
       if [[ "$ALLOW_CUSTOM_RELEASE_BASE" == "1" ]]; then
-        warn "Using custom RELEASE_BASE. Make sure the source is trusted: ${RELEASE_BASE}"
+        warn "$(msg custom_release_base "$RELEASE_BASE")"
         return 0
       fi
       ;;
   esac
 
-  fail "RELEASE_BASE must be a trusted HTTPS URL. Set ALLOW_CUSTOM_RELEASE_BASE=1 only if you really need a custom source."
+  fail "$(msg bad_release_base)"
 }
 
 select_install_mode() {
@@ -88,16 +181,13 @@ select_install_mode() {
   fi
 
   while true; do
-    cat >&2 <<'EOF'
-Select install mode:
-  1. Official binary install (recommended, no Docker)
-  2. Docker Compose
-EOF
-    printf '%s' 'Select install mode [1]: ' >&2
+    msg select_install_mode >&2
+    printf '\n' >&2
+    msg select_install_prompt >&2
     if [[ -r /dev/tty ]]; then
-      IFS= read -r value </dev/tty || fail "Unable to read install mode."
+      IFS= read -r value </dev/tty || fail "$(msg read_install_mode_failed)"
     else
-      IFS= read -r value || fail "Unable to read install mode. For non-interactive installs, set INSTALL_MODE=binary or INSTALL_MODE=compose."
+      IFS= read -r value || fail "$(msg read_install_mode_noninteractive)"
     fi
 
     case "$value" in
@@ -110,14 +200,14 @@ EOF
         return 0
         ;;
       *)
-        warn "Please enter 1 or 2."
+        warn "$(msg enter_1_or_2)"
         ;;
     esac
   done
 }
 
 detect_os() {
-  [[ -r /etc/os-release ]] || fail "Unable to detect OS: /etc/os-release is missing. Supported systems: Debian/Ubuntu/Rocky/Alma/Alpine."
+  [[ -r /etc/os-release ]] || fail "$(msg os_missing)"
 
   # shellcheck disable=SC1091
   . /etc/os-release
@@ -136,9 +226,24 @@ detect_os() {
       OS_FAMILY="alpine"
       ;;
     *)
-      fail "Unsupported OS: ${PRETTY_NAME:-${OS_ID}}. Supported systems: Debian/Ubuntu/Rocky/Alma/Alpine."
+      fail "$(msg unsupported_os "${PRETTY_NAME:-${OS_ID}}")"
       ;;
   esac
+}
+
+enforce_install_mode_policy() {
+  if [[ "$OS_FAMILY" != "alpine" ]]; then
+    return 0
+  fi
+
+  if [[ "$INSTALL_MODE" == "compose" ]]; then
+    fail "$(msg alpine_compose_disabled)"
+  fi
+
+  if [[ -z "$INSTALL_MODE" ]]; then
+    INSTALL_MODE="binary"
+    warn "$(msg alpine_binary_only)"
+  fi
 }
 
 detect_arch() {
@@ -152,7 +257,7 @@ detect_arch() {
       printf 'arm64'
       ;;
     *)
-      fail "Unsupported CPU architecture: ${machine}. Supported architectures: amd64/arm64."
+      fail "$(msg unsupported_arch "$machine")"
       ;;
   esac
 }
@@ -211,11 +316,6 @@ install_compose_dependencies() {
         docker \
         docker-compose-plugin
       ;;
-    alpine)
-      run_as_root apk add --no-cache \
-        docker \
-        docker-cli-compose
-      ;;
   esac
 
   if command -v systemctl >/dev/null 2>&1; then
@@ -225,7 +325,7 @@ install_compose_dependencies() {
     run_as_root service docker start
   fi
 
-  docker compose version >/dev/null 2>&1 || fail "Docker Compose is still unavailable after installation."
+  docker compose version >/dev/null 2>&1 || fail "$(msg compose_unavailable)"
 }
 
 ensure_scheduler() {
@@ -242,7 +342,7 @@ download_file() {
   local url="$1"
   local output="$2"
 
-  log "Downloading: ${url}"
+  log "$(msg downloading "$url")"
   if command -v curl >/dev/null 2>&1; then
     curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 "$url" -o "$output"
   elif command -v wget >/dev/null 2>&1; then
@@ -252,7 +352,7 @@ download_file() {
       wget --timeout=10 --tries=3 -O "$output" "$url"
     fi
   else
-    fail "curl or wget is required."
+    fail "$(msg need_downloader)"
   fi
 }
 
@@ -267,7 +367,7 @@ verify_sha256() {
   elif command -v shasum >/dev/null 2>&1; then
     (cd "$(dirname "$package_file")" && awk -v n="$package_name" '$2==n{print; found=1} END{exit !found}' "$sums_file" | shasum -a 256 -c -)
   else
-    warn "sha256sum/shasum was not found; skipping SHA256 verification."
+    warn "$(msg hash_missing_warn)"
   fi
 }
 
@@ -278,7 +378,7 @@ verify_tar_paths() {
   while IFS= read -r entry; do
     case "$entry" in
       ""|/*|../*|*/../*|*"/.."|*"/../"*|*":"*)
-        fail "Package contains an unsafe path: ${entry}"
+        fail "$(msg unsafe_path "$entry")"
         ;;
     esac
   done < <(tar -tzf "$package_file")
@@ -304,7 +404,7 @@ install_relay_binary() {
 
   verify_tar_paths "$package_file"
   tar -xzf "$package_file" -C "$tmp_dir"
-  [[ -x "${tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "Package is missing the netbird-relay binary."
+  [[ -x "${tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "$(msg missing_binary)"
 
   run_as_root install -m 0755 -D "${tmp_dir}/netbird-relay/bin/netbird-relay" "$BIN_PATH"
   run_as_root install -m 0644 -D "${tmp_dir}/netbird-relay/services/netbird-relay.service" /etc/systemd/system/netbird-relay.service
@@ -321,9 +421,11 @@ install_installer_files() {
 }
 
 main() {
+  select_language
   detect_install_mode "$@"
   validate_release_base
   detect_os
+  enforce_install_mode_policy
   install_base_dependencies
   ensure_scheduler
   install_installer_files
@@ -331,8 +433,8 @@ main() {
 
   if [[ "$INSTALL_MODE" == "compose" ]]; then
     install_compose_dependencies
-    log "Starting Docker Compose setup wizard."
-    DEPLOY_MODE=compose exec bash "$INSTALL_DIR/setup-relay.sh"
+    log "$(msg compose_wizard)"
+    RELS_LANG="$RELS_LANG" DEPLOY_MODE=compose exec bash "$INSTALL_DIR/setup-relay.sh"
   fi
 
   local arch package_file tmp_dir
@@ -343,9 +445,9 @@ main() {
   package_file="$(download_relay_package "$arch" "$tmp_dir")"
   install_relay_binary "$package_file"
 
-  log "netbird-relay binary installed: ${BIN_PATH}"
-  log "Starting binary setup wizard."
-  DEPLOY_MODE=binary exec bash "$INSTALL_DIR/setup-relay.sh"
+  log "$(msg binary_installed "$BIN_PATH")"
+  log "$(msg binary_wizard)"
+  RELS_LANG="$RELS_LANG" DEPLOY_MODE=binary exec bash "$INSTALL_DIR/setup-relay.sh"
 }
 
 main "$@"

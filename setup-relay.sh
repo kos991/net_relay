@@ -8,6 +8,14 @@ BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
 DEPLOY_MODE="${DEPLOY_MODE:-binary}"
 COMPOSE_FILE="${COMPOSE_FILE:-${CONFIG_DIR}/docker-compose.yml}"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-${CONFIG_DIR}/compose.env}"
+COMPOSE_STACK_ENV_FILE="${COMPOSE_STACK_ENV_FILE:-${CONFIG_DIR}/compose-stack.env}"
+DEFAULT_IMAGE_REPOSITORY="${DEFAULT_IMAGE_REPOSITORY:-crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels}"
+RELAY_IMAGE_DEFAULT="${RELAY_IMAGE_DEFAULT:-crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay}"
+CADDY_IMAGE_DEFAULT="${CADDY_IMAGE_DEFAULT:-crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:caddy}"
+SYNC_IMAGE_DEFAULT="${SYNC_IMAGE_DEFAULT:-crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:sync}"
+RELAY_IMAGE="${RELAY_IMAGE:-${RELAY_IMAGE_DEFAULT}}"
+CADDY_IMAGE="${CADDY_IMAGE:-${CADDY_IMAGE_DEFAULT}}"
+SYNC_IMAGE="${SYNC_IMAGE:-${SYNC_IMAGE_DEFAULT}}"
 SERVICE_USER="${SERVICE_USER:-netbird-relay}"
 SERVICE_GROUP="${SERVICE_GROUP:-netbird-relay}"
 
@@ -245,6 +253,17 @@ issue_cloudflare_certificate() {
     --reloadcmd "$reloadcmd"
 }
 
+compose_cloudflare_certificate() {
+  if [[ "$DEPLOY_MODE" != "compose" || "$CERT_MODE" != "cloudflare" ]]; then
+    return 1
+  fi
+
+  [[ -n "${ACME_EMAIL:-}" ]] || fail "ACME email must not be empty."
+  [[ -n "${CF_API_TOKEN:-}" ]] || fail "Cloudflare API Token must not be empty."
+  run_as_root mkdir -p "$CERT_DIR"
+  return 0
+}
+
 select_certificate_mode() {
   local value=""
   while true; do
@@ -278,6 +297,9 @@ ensure_certificate() {
 
   case "$CERT_MODE" in
     cloudflare)
+      if compose_cloudflare_certificate; then
+        return 0
+      fi
       issue_cloudflare_certificate "$domain" "$cert_file" "$key_file"
       return 0
       ;;
@@ -323,8 +345,9 @@ EOF
 }
 
 write_compose_file() {
-  local env_tmp compose_tmp
+  local env_tmp stack_env_tmp compose_tmp
   env_tmp="$(mktemp)"
+  stack_env_tmp="$(mktemp)"
   compose_tmp="$(mktemp)"
 
   cat > "$env_tmp" <<EOF
@@ -339,10 +362,67 @@ NB_TLS_CERT_FILE=${TLS_CERT_FILE}
 NB_TLS_KEY_FILE=${TLS_KEY_FILE}
 EOF
 
-  cat > "$compose_tmp" <<EOF
+  cat > "$stack_env_tmp" <<EOF
+RELAY_DOMAIN=${RELAY_DOMAIN}
+ACME_EMAIL=${ACME_EMAIL:-}
+CF_API_TOKEN=${CF_API_TOKEN:-}
+EOF
+
+  if [[ "$CERT_MODE" == "cloudflare" ]]; then
+    cat > "$compose_tmp" <<EOF
+services:
+  caddy:
+    image: ${CADDY_IMAGE}
+    container_name: netbird-caddy-cert
+    restart: unless-stopped
+    env_file:
+      - ${COMPOSE_STACK_ENV_FILE}
+    command:
+      - caddy
+      - run
+      - --config
+      - /etc/caddy/Caddyfile
+      - --adapter
+      - caddyfile
+    volumes:
+      - ${CONFIG_DIR}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${CONFIG_DIR}/caddy-data:/data
+      - ${CONFIG_DIR}/caddy-config:/config
+
+  sync-relay-certs:
+    image: ${SYNC_IMAGE}
+    container_name: netbird-relay-cert-sync
+    restart: unless-stopped
+    environment:
+      RELAY_DOMAIN: ${RELAY_DOMAIN}
+      RELAY_CONTAINER_NAME: netbird-relay
+      SYNC_INTERVAL: 60
+    volumes:
+      - ${CONFIG_DIR}/caddy-data:/caddy-data:ro
+      - ${CERT_DIR}:/relay-certs
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - caddy
+
+  netbird-relay:
+    image: ${RELAY_IMAGE}
+    container_name: netbird-relay
+    restart: unless-stopped
+    env_file:
+      - ${COMPOSE_ENV_FILE}
+    ports:
+      - "${RELAY_PORT}:${RELAY_PORT}/tcp"
+      - "${STUN_PORT}:${STUN_PORT}/udp"
+    volumes:
+      - ${CONFIG_DIR}:${CONFIG_DIR}:ro
+    depends_on:
+      - sync-relay-certs
+EOF
+  else
+    cat > "$compose_tmp" <<EOF
 services:
   netbird-relay:
-    image: netbirdio/relay:latest
+    image: ${RELAY_IMAGE}
     container_name: netbird-relay
     restart: unless-stopped
     env_file:
@@ -353,11 +433,32 @@ services:
     volumes:
       - ${CONFIG_DIR}:${CONFIG_DIR}:ro
 EOF
+  fi
 
   run_as_root mkdir -p "$CONFIG_DIR"
   run_as_root install -m 0600 "$env_tmp" "$COMPOSE_ENV_FILE"
+  run_as_root install -m 0600 "$stack_env_tmp" "$COMPOSE_STACK_ENV_FILE"
+  if [[ "$CERT_MODE" == "cloudflare" ]]; then
+    local caddy_tmp
+    caddy_tmp="$(mktemp)"
+    cat > "$caddy_tmp" <<EOF
+{
+	email ${ACME_EMAIL}
+}
+
+${RELAY_DOMAIN} {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+
+	respond "NetBird Relay certificate bootstrap endpoint" 200
+}
+EOF
+    run_as_root install -m 0644 "$caddy_tmp" "${CONFIG_DIR}/Caddyfile"
+    rm -f "$caddy_tmp"
+  fi
   run_as_root install -m 0644 "$compose_tmp" "$COMPOSE_FILE"
-  rm -f "$env_tmp" "$compose_tmp"
+  rm -f "$env_tmp" "$stack_env_tmp" "$compose_tmp"
 }
 
 restart_service() {
@@ -403,6 +504,7 @@ Relay node group mode: ${mode_label}
 Relay binary: ${BIN_PATH}
 Relay environment file: ${ENV_FILE}
 Compose file: ${COMPOSE_FILE}
+Compose image: ${RELAY_IMAGE}
 Relay address: rels://${RELAY_DOMAIN}:${RELAY_PORT}
 STUN address: stun:${RELAY_DOMAIN}:${STUN_PORT}
 Relay auth secret: ${relay_secret_hint} (full value was written to ${ENV_FILE})
