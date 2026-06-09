@@ -24,7 +24,6 @@ LOGIN_CFG="${ROOT_DIR}/ova/files/99-net-relay-login.cfg"
 BUILD_OVA="${ROOT_DIR}/.github/workflows/build-ova.yml"
 VALIDATE_WORKFLOW="${ROOT_DIR}/.github/workflows/validate.yml"
 SYNC_OFFICIAL="${ROOT_DIR}/.github/workflows/sync-official-relay.yml"
-SYNC_ACR_RELAY="${ROOT_DIR}/.github/workflows/sync-acr-relay-image.yml"
 SYSCTL_CONF="${ROOT_DIR}/ova/files/99-net-relay-sysctl.conf"
 SSHD_CONFIG="${ROOT_DIR}/ova/files/sshd_config"
 CADDY_DOCKERFILE="${ROOT_DIR}/caddy/Dockerfile"
@@ -417,19 +416,6 @@ grep -q "Scan relay source with govulncheck" "$VALIDATE_WORKFLOW"
 grep -q "go install golang.org/x/vuln/cmd/govulncheck" "$VALIDATE_WORKFLOW"
 grep -q "CRITICAL,HIGH" "$VALIDATE_WORKFLOW"
 
-grep -q "name: sync-acr-relay-image" "$SYNC_ACR_RELAY"
-grep -q "schedule:" "$SYNC_ACR_RELAY"
-grep -q "workflow_dispatch:" "$SYNC_ACR_RELAY"
-grep -q "netbirdio/relay" "$SYNC_ACR_RELAY"
-grep -q "crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay" "$SYNC_ACR_RELAY"
-grep -q "ALIYUN_ACR_USERNAME" "$SYNC_ACR_RELAY"
-grep -q "ALIYUN_ACR_PASSWORD" "$SYNC_ACR_RELAY"
-grep -q "docker login" "$SYNC_ACR_RELAY"
-grep -q "docker pull" "$SYNC_ACR_RELAY"
-grep -q "docker tag" "$SYNC_ACR_RELAY"
-grep -q "docker push" "$SYNC_ACR_RELAY"
-grep -q "cosign sign" "$SYNC_ACR_RELAY"
-
 grep -q "github.com/caddy-dns/cloudflare" "$CADDY_DOCKERFILE"
 grep -q "COPY --from=builder /usr/bin/caddy /usr/bin/caddy" "$CADDY_DOCKERFILE"
 grep -q "sync-relay-certs.sh" "$SYNC_DOCKERFILE"
@@ -437,8 +423,10 @@ grep -q "curl" "$SYNC_DOCKERFILE"
 grep -q "RELAY_DOMAIN" "$SYNC_CERTS_SCRIPT"
 grep -q "/var/run/docker.sock" "$SYNC_CERTS_SCRIPT"
 grep -q "restart_relay" "$SYNC_CERTS_SCRIPT"
-if [[ -e "$RELAY_DOCKERFILE" ]]; then
-  echo "relay/Dockerfile must not exist; the ACR relay image is synced from official netbirdio/relay by GitHub Actions." >&2
+grep -q "FROM netbirdio/relay:latest" "$RELAY_DOCKERFILE"
+
+if [[ -e "${ROOT_DIR}/.github/workflows/sync-acr-relay-image.yml" ]]; then
+  echo "relay image must be built by Aliyun ACR from relay/Dockerfile, not synced by GitHub Actions." >&2
   exit 1
 fi
 
