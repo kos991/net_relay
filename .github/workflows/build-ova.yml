@@ -52,6 +52,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify Cloudflare R2 S3 credentials
+        run: |
+          if [ -z "${R2_RELEASE_BASE}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID}" ] || [ -z "${CLOUDFLARE_R2_ACCESS_KEY_ID}" ] || [ -z "${CLOUDFLARE_R2_SECRET_ACCESS_KEY}" ] || [ -z "${CLOUDFLARE_R2_BUCKET}" ]; then
+            echo "Cloudflare R2 is not fully configured; skipping R2 credential verification."
+            exit 0
+          fi
+
+          python3 -m pip install --user --upgrade awscli
+          export PATH="${HOME}/.local/bin:${PATH}"
+          export AWS_ACCESS_KEY_ID="${CLOUDFLARE_R2_ACCESS_KEY_ID}"
+          export AWS_SECRET_ACCESS_KEY="${CLOUDFLARE_R2_SECRET_ACCESS_KEY}"
+          export AWS_DEFAULT_REGION="auto"
+          r2_endpoint="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          object_key="_permission-test/github-actions-${GITHUB_RUN_ID}.txt"
+          printf 'net-relay r2 permission test: %s\n' "${GITHUB_RUN_ID}" > r2-permission-test.txt
+
+          aws --endpoint-url "${r2_endpoint}" s3 cp r2-permission-test.txt "s3://${CLOUDFLARE_R2_BUCKET}/${object_key}"
+          aws --endpoint-url "${r2_endpoint}" s3 cp "s3://${CLOUDFLARE_R2_BUCKET}/${object_key}" r2-permission-test.downloaded.txt
+          cmp r2-permission-test.txt r2-permission-test.downloaded.txt
+          aws --endpoint-url "${r2_endpoint}" s3 rm "s3://${CLOUDFLARE_R2_BUCKET}/${object_key}"
+
       - name: Check OVA scripts
         run: bash tests/ova-scripts-check.sh
 
