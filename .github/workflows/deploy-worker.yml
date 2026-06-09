@@ -15,6 +15,10 @@ on:
         description: "Optional Cloudflare DNS zone name used to create the Worker hostname record"
         required: false
         default: "jinfei.org"
+      zone_id:
+        description: "Optional Cloudflare Zone ID; preferred when the API token cannot list zones"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -69,6 +73,7 @@ jobs:
         env:
           ROUTE: ${{ github.event.inputs.route }}
           ZONE_NAME: ${{ github.event.inputs.zone_name }}
+          ZONE_ID: ${{ github.event.inputs.zone_id || secrets.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
@@ -86,13 +91,16 @@ jobs:
             exit 0
           fi
 
-          zone_id="$(curl -fsSL \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            -H "Content-Type: application/json" \
-            "https://api.cloudflare.com/client/v4/zones?name=${ZONE_NAME}" \
-            | python3 -c 'import json,sys; data=json.load(sys.stdin); result=data.get("result") or []; print(result[0]["id"] if result else "")')"
+          zone_id="${ZONE_ID:-}"
           if [ -z "${zone_id}" ]; then
-            echo "::error::Cloudflare zone not found or token cannot read zones: ${ZONE_NAME}"
+            zone_id="$(curl -fsSL \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "https://api.cloudflare.com/client/v4/zones?name=${ZONE_NAME}" \
+              | python3 -c 'import json,sys; data=json.load(sys.stdin); result=data.get("result") or []; print(result[0]["id"] if result else "")')"
+          fi
+          if [ -z "${zone_id}" ]; then
+            echo "::error::Cloudflare zone not found or token cannot read zones: ${ZONE_NAME}. Set CLOUDFLARE_ZONE_ID to avoid the zone-list API."
             exit 1
           fi
 
