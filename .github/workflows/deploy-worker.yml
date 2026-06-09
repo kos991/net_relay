@@ -89,7 +89,7 @@ jobs:
           zone_id="$(curl -fsSL \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            "https://api.cloudflare.com/client/v4/zones?name=${ZONE_NAME}&account.id=${CLOUDFLARE_ACCOUNT_ID}" \
+            "https://api.cloudflare.com/client/v4/zones?name=${ZONE_NAME}" \
             | python3 -c 'import json,sys; data=json.load(sys.stdin); result=data.get("result") or []; print(result[0]["id"] if result else "")')"
           if [ -z "${zone_id}" ]; then
             echo "::error::Cloudflare zone not found or token cannot read zones: ${ZONE_NAME}"
