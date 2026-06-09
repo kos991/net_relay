@@ -28,9 +28,24 @@ jobs:
           ROUTE: ${{ github.event.inputs.route }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET || secrets.CLOUDFLARE_R2_BUCKET }}
         run: |
           npm install --global wrangler
-          deploy_command=(deploy worker/rels-worker.js --name "${WORKER_NAME}" --compatibility-date 2026-06-08)
+          cat > worker/wrangler.jsonc <<EOF
+          {
+            "name": "${WORKER_NAME}",
+            "main": "rels-worker.js",
+            "compatibility_date": "2026-06-08",
+            "r2_buckets": [
+              {
+                "binding": "RELEASE_BUCKET",
+                "bucket_name": "${CLOUDFLARE_R2_BUCKET}"
+              }
+            ]
+          }
+          EOF
+
+          deploy_command=(deploy --config worker/wrangler.jsonc)
           case "${ROUTE}" in
             none|NONE|-)
               ROUTE=""
