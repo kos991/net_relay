@@ -267,7 +267,7 @@ jobs:
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
             --run-command "chmod +x /usr/local/bin/netbird-relay /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /usr/local/sbin/setup-root-resize /usr/local/sbin/setup-network-check /usr/local/sbin/setup-zram /usr/local/sbin/setup-kernel-tuning /usr/local/sbin/setup-bootloader /opt/netbird-relay-installer/setup-relay.sh" \
             --run-command "ln -sf /usr/local/sbin/rels /usr/local/bin/rels" \
-            --run-command "setup-bootloader /dev/sda1 /dev/sda" \
+            --run-command "/usr/local/sbin/setup-bootloader /dev/sda1 /dev/sda" \
             --run-command "setup-cloud-init" \
             --run-command "rc-update add qemu-guest-agent default || true" \
             --run-command "chmod +x /etc/init.d/netbird-relay.openrc && mv /etc/init.d/netbird-relay.openrc /etc/init.d/netbird-relay" \
