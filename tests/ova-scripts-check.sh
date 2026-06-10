@@ -138,7 +138,11 @@ grep -q "Build official NetBird relay binaries" "$BUILD_OVA"
 grep -q "OVA_NAME" "$BUILD_OVA"
 grep -q "RAW_NAME" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.ova" "$BUILD_OVA"
-grep -q "net-relay-alpine-x86_64.raw.img.gz" "$BUILD_OVA"
+grep -q "net-relay-alpine-x86_64.raw" "$BUILD_OVA"
+if grep -Eq "raw\\.img\\.gz|gzip -9 release/net-relay-alpine-x86_64\\.raw\\.img|gzip -cd" "$BUILD_OVA"; then
+  echo "Aliyun RAW assets must be published as uncompressed whole-disk .raw files, not .raw.img.gz." >&2
+  exit 1
+fi
 if grep -Eq "OVA_MINIMAL_NAME|minimal\\.ova|minimal\\.ovf|net-relay-alpine-x86_64-minimal" "$BUILD_OVA"; then
   echo "Do not build or publish minimal OVA variants." >&2
   exit 1
@@ -201,6 +205,9 @@ grep -q "part-set-bootable /dev/sdb 1 true" "$BUILD_OVA"
 grep -q "copy-device-to-device /dev/sda /dev/sdb1" "$BUILD_OVA"
 grep -q "resize2fs /dev/sdb1" "$BUILD_OVA"
 grep -q "Verify RAW BIOS bootability" "$BUILD_OVA"
+grep -q "sfdisk --verify" "$BUILD_OVA"
+grep -q "fdisk -l" "$BUILD_OVA"
+grep -q "RAW image is missing a bootable MBR partition" "$BUILD_OVA"
 grep -q "No bootable device" "$BUILD_OVA"
 grep -q "qemu-img convert -p -O raw" "$BUILD_OVA"
 grep -q '"release/${RAW_NAME}"' "$BUILD_OVA"
