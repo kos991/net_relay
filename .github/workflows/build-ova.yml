@@ -203,7 +203,10 @@ jobs:
           PY
 
       - name: Download Alpine cloud image
+        env:
+          LIBGUESTFS_BACKEND: direct
         run: |
+          export LIBGUESTFS_BACKEND=direct
           curl -fsSL "$ALPINE_IMAGE_URL" -o ova-build/alpine.qcow2
           qemu-img create -f qcow2 ova-build/net-relay-alpine.qcow2 3G
           sudo guestfish --rw -a ova-build/alpine.qcow2 -a ova-build/net-relay-alpine.qcow2 <<'EOF'
