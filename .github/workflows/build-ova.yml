@@ -32,7 +32,8 @@ jobs:
     env:
       ALPINE_IMAGE_URL: https://dev.alpinelinux.org/~tomalok/alpine-cloud-images/v3.23/nocloud/x86_64/nocloud_alpine-3.23.4-x86_64-bios-cloudinit-r0.qcow2
       OVA_NAME: net-relay-alpine-x86_64.ova
-      RAW_NAME: net-relay-alpine-x86_64.raw.img.gz
+      RAW_NAME: net-relay-alpine-x86_64.raw
+      IMAGE_SIZE_GIB: "1"
       INSTALLER_ARCHIVE_NAME: net_relay-main.tar.gz
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
@@ -84,7 +85,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-utils qemu-system-x86 libguestfs-tools tar gzip
+          sudo apt-get install -y qemu-utils qemu-system-x86 libguestfs-tools tar
 
       - name: Install Trivy
         run: |
@@ -208,7 +209,7 @@ jobs:
         run: |
           export LIBGUESTFS_BACKEND=direct
           curl -fsSL "$ALPINE_IMAGE_URL" -o ova-build/alpine.qcow2
-          qemu-img create -f qcow2 ova-build/net-relay-alpine.qcow2 3G
+          qemu-img create -f qcow2 ova-build/net-relay-alpine.qcow2 "${IMAGE_SIZE_GIB}G"
           sudo guestfish --rw -a ova-build/alpine.qcow2 -a ova-build/net-relay-alpine.qcow2 <<'EOF'
           run
           part-init /dev/sdb mbr
@@ -296,7 +297,7 @@ jobs:
             </References>
             <DiskSection>
               <Info>Virtual disk information</Info>
-              <Disk ovf:diskId="disk1" ovf:fileRef="file1" ovf:capacity="3" ovf:capacityAllocationUnits="byte * 2^30" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
+              <Disk ovf:diskId="disk1" ovf:fileRef="file1" ovf:capacity="${IMAGE_SIZE_GIB}" ovf:capacityAllocationUnits="byte * 2^30" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
             </DiskSection>
             <NetworkSection>
               <Info>Logical networks used in the package</Info>
@@ -320,16 +321,21 @@ jobs:
           }
           write_ovf release/net-relay-alpine-x86_64.ovf '<rasd:Connection>VM Network</rasd:Connection>'
           tar -C release -cf "release/${OVA_NAME}" net-relay-alpine-x86_64.ovf net-relay-alpine-x86_64.vmdk
-          qemu-img convert -p -O raw ova-build/net-relay-alpine.qcow2 release/net-relay-alpine-x86_64.raw.img
-          gzip -9 release/net-relay-alpine-x86_64.raw.img
+          qemu-img convert -p -O raw ova-build/net-relay-alpine.qcow2 "release/${RAW_NAME}"
 
       - name: Verify RAW BIOS bootability
         run: |
-          gzip -cd "release/${RAW_NAME}" > ova-build/raw-boot-test.img
+          qemu-img info "release/${RAW_NAME}"
+          sudo sfdisk --verify "release/${RAW_NAME}"
+          if ! sudo fdisk -l "release/${RAW_NAME}" | grep -Eq '^[^[:space:]]+[0-9]+[[:space:]]+\*'; then
+            sudo fdisk -l "release/${RAW_NAME}"
+            echo "::error::RAW image is missing a bootable MBR partition."
+            exit 1
+          fi
           qemu-system-x86_64 \
             -machine pc \
             -m 512 \
-            -drive file=ova-build/raw-boot-test.img,format=raw,if=virtio \
+            -drive file=release/${RAW_NAME},format=raw,if=virtio \
             -serial file:ova-build/raw-boot.log \
             -display none \
             -no-reboot \
@@ -469,7 +475,7 @@ jobs:
           - ${RELAY_AMD64_PACKAGE}: Linux amd64 official relay binary package.
           - ${RELAY_ARM64_PACKAGE}: Linux arm64 official relay binary package.
           - ${OVA_NAME}: OVA with OVF network Connection for importers that require it.
-          - ${RAW_NAME}: RAW image for cloud import workflows such as Aliyun custom images.
+          - ${RAW_NAME}: uncompressed RAW disk image for Aliyun ECS custom image import.
           - main.sh: secure bootstrap script served by https://rels.jinfei.org.
           - install.sh: one-click installer for Debian, Ubuntu, Rocky, Alma, and Alpine.
           - SHA256SUMS: SHA256 checksums for all published artifacts.
