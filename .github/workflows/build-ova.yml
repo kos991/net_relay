@@ -214,8 +214,9 @@ jobs:
           part-init /dev/sdb mbr
           part-add /dev/sdb p 2048 -2048
           part-set-bootable /dev/sdb 1 true
+          copy-device-to-device /dev/sda /dev/sdb1
+          resize2fs /dev/sdb1
           EOF
-          sudo -E virt-resize --expand /dev/sda ova-build/alpine.qcow2 ova-build/net-relay-alpine.qcow2
 
       - name: Fetch Alpine OVA runtime packages
         run: |
