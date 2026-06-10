@@ -429,6 +429,14 @@ grep -q "verify_tar_paths" "$INSTALL"
 grep -q -- "--proto '=https'" "$INSTALL"
 grep -q -- "--https-only" "$INSTALL"
 grep -q "awk -v n=" "$INSTALL"
+grep -q "选择语言" "$MAIN"
+grep -q "选择安装模式" "$INSTALL"
+grep -q "需要 root 权限" "$MAIN"
+grep -q "需要 root 权限" "$INSTALL"
+if LC_ALL=C.UTF-8 grep -Eq "闇€|閫夋嫨|璇烽|瀹夎|鏃犳硶|姝ｅ湪|涓嬭浇|鎴|锛|銆|€|�" "$MAIN" "$INSTALL"; then
+  echo "Installer Chinese text must be valid UTF-8, not mojibake." >&2
+  exit 1
+fi
 
 if grep -q "Relay auth secret: \${RELAY_AUTH_SECRET}" "$SETUP"; then
   echo "setup summary must not print relay auth secret in plaintext." >&2
