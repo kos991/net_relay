@@ -33,6 +33,20 @@ SYNC_DOCKERFILE="${ROOT_DIR}/sync/Dockerfile"
 SYNC_CERTS_SCRIPT="${ROOT_DIR}/sync/sync-relay-certs.sh"
 RELAY_DOCKERFILE="${ROOT_DIR}/relay/Dockerfile"
 
+find_python() {
+  local candidate
+  for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[0] == 3 else 1)' >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  echo "Python 3 is required to check release asset visibility." >&2
+  return 1
+}
+
+PYTHON_BIN="$(find_python)"
+
 bash -n "$FIRSTBOOT"
 bash -n "$RELS"
 bash -n "$SETUP"
@@ -137,10 +151,15 @@ grep -q "tag_prefix" "$BUILD_OVA"
 grep -q "Build official NetBird relay binaries" "$BUILD_OVA"
 grep -q "OVA_NAME" "$BUILD_OVA"
 grep -q "RAW_NAME" "$BUILD_OVA"
+grep -q "IMAGE_ASSETS" "$BUILD_OVA"
 grep -q "IMAGE_SIZE_MIB" "$BUILD_OVA"
 grep -q "MIN_ROOT_FREE_MIB" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.ova" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.raw" "$BUILD_OVA"
+if grep -Eqi "VHD_NAME|\\.vhd|fixed VHD|fixed-size VHD|qemu-img convert -p -O vpc" "$BUILD_OVA" "$WORKER"; then
+  echo "VHD release assets are not supported; publish OVA and RAW tar.xz only." >&2
+  exit 1
+fi
 if grep -Eq "raw\\.img\\.gz|gzip -9 release/net-relay-alpine-x86_64\\.raw\\.img|gzip -cd" "$BUILD_OVA"; then
   echo "Aliyun RAW assets must be published as uncompressed whole-disk .raw files, not .raw.img.gz." >&2
   exit 1
@@ -214,8 +233,12 @@ grep -q "fdisk -l" "$BUILD_OVA"
 grep -q "RAW image is missing a bootable MBR partition" "$BUILD_OVA"
 grep -q "No bootable device" "$BUILD_OVA"
 grep -q "qemu-img convert -p -O raw" "$BUILD_OVA"
+grep -q "Package RAW tar.xz image" "$BUILD_OVA"
+grep -q "tar -C release -cJf" "$BUILD_OVA"
+grep -q 'rm -f "release/${RAW_NAME}"' "$BUILD_OVA"
 grep -q '"release/${RAW_NAME}"' "$BUILD_OVA"
 grep -q '"$RAW_NAME"' "$BUILD_OVA"
+grep -Fq '"${RAW_NAME}.tar.xz"' "$BUILD_OVA"
 if grep -Eq 'QCOW2_NAME|net-relay-alpine-x86_64\.qcow2\.gz|qemu-img convert -p -O qcow2|release/\$\{QCOW2_NAME\}|\\"\$QCOW2_NAME\\"' "$BUILD_OVA"; then
   echo "QCOW2 release assets are not supported; publish RAW for cloud import instead." >&2
   exit 1
@@ -247,6 +270,58 @@ grep -q "Vulnerabilities" "$BUILD_OVA"
 grep -q "release/trivy-fs.json" "$BUILD_OVA"
 grep -q "release/net-relay-sbom.cdx.json" "$BUILD_OVA"
 grep -q "CRITICAL,HIGH" "$BUILD_OVA"
+grep -Fq '"${IMAGE_ASSETS[@]}"' "$BUILD_OVA"
+grep -q "mapfile -t IMAGE_ASSETS < release/IMAGE_ASSETS.txt" "$BUILD_OVA"
+grep -q "image_release_args" "$BUILD_OVA"
+"$PYTHON_BIN" - "$BUILD_OVA" <<'PY'
+from pathlib import Path
+import sys
+
+workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
+
+publish_block = workflow.split("gh release create", 1)[1].split("\n\n", 1)[0]
+hidden_assets = (
+    "release/trivy-fs.json",
+    "release/net-relay-sbom.cdx.json",
+    "release/${INSTALLER_ARCHIVE_NAME}",
+    "release/${RAW_NAME}",
+)
+for asset in hidden_assets:
+    if asset in publish_block:
+        print(f"{asset} must not be attached as a visible GitHub Release asset.", file=sys.stderr)
+        raise SystemExit(1)
+
+notes = workflow.split("cat > release/RELEASE_NOTES.md <<EOF", 1)[1].split("\n          EOF", 1)[0]
+for asset in (
+    "trivy-fs.json",
+    "net-relay-sbom.cdx.json",
+    "net_relay-main.tar.gz",
+    "${RAW_NAME}: uncompressed",
+    "VHD",
+    ".vhd",
+):
+    if asset in notes:
+        print(f"{asset} must not be shown in Release notes published assets.", file=sys.stderr)
+        raise SystemExit(1)
+
+if '"${image_release_args[@]}"' not in publish_block:
+    print("Image assets must be attached to the GitHub Release through image_release_args.", file=sys.stderr)
+    raise SystemExit(1)
+
+image_assets_block = workflow.split("IMAGE_ASSETS=(", 1)[1].split(")", 1)[0]
+image_assets = [
+    line.strip()
+    for line in image_assets_block.splitlines()
+    if line.strip()
+]
+expected_image_assets = ['"${RAW_NAME}.tar.xz"']
+if image_assets != expected_image_assets:
+    print(
+        f"Release image assets must be exactly {expected_image_assets}, got {image_assets}.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+PY
 grep -q "cp main.sh release/main.sh" "$BUILD_OVA"
 grep -q '"release/main.sh"' "$BUILD_OVA"
 grep -q "netbird-relay-linux-amd64.tar.gz" "$BUILD_OVA"

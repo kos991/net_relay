@@ -35,7 +35,6 @@ jobs:
       RAW_NAME: net-relay-alpine-x86_64.raw
       IMAGE_SIZE_MIB: "384"
       MIN_ROOT_FREE_MIB: "80"
-      INSTALLER_ARCHIVE_NAME: net_relay-main.tar.gz
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || 'main' }}
@@ -179,7 +178,6 @@ jobs:
           mkdir -p ova-build/netbird-relay-installer ova-build/relay-package
           cp -a relay setup-relay.sh install.sh main.sh README.md .gitignore .gitattributes ova-build/netbird-relay-installer/
           tar -xzf "release/${RELAY_AMD64_PACKAGE}" -C ova-build/relay-package
-          git archive --format=tar.gz --prefix=net_relay-main/ HEAD -o "release/${INSTALLER_ARCHIVE_NAME}"
           cp main.sh release/main.sh
           cp install.sh release/install.sh
 
@@ -366,6 +364,17 @@ jobs:
           tail -n 120 ova-build/raw-boot.log || true
           exit 1
 
+      - name: Package RAW tar.xz image
+        run: |
+          IMAGE_ASSETS=(
+            "${RAW_NAME}.tar.xz"
+          )
+
+          tar -C release -cJf "release/${RAW_NAME}.tar.xz" "$RAW_NAME"
+          rm -f "release/${RAW_NAME}"
+
+          printf '%s\n' "${IMAGE_ASSETS[@]}" > release/IMAGE_ASSETS.txt
+
       - name: Scan release workspace with Trivy
         run: |
           mkdir -p ova-build/trivy-workspace
@@ -451,7 +460,8 @@ jobs:
             --ignore-unfixed \
             --exit-code 1 \
             release/net-relay-sbom.cdx.json
-          (cd release && sha256sum "$OVA_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh trivy-rootfs.json trivy-fs.json net-relay-sbom.cdx.json > SHA256SUMS)
+          mapfile -t IMAGE_ASSETS < release/IMAGE_ASSETS.txt
+          (cd release && sha256sum "$OVA_NAME" "${IMAGE_ASSETS[@]}" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh trivy-rootfs.json trivy-fs.json net-relay-sbom.cdx.json > SHA256SUMS)
 
       - name: Write release notes
         env:
@@ -483,11 +493,11 @@ jobs:
           - ${RELAY_AMD64_PACKAGE}: Linux amd64 official relay binary package.
           - ${RELAY_ARM64_PACKAGE}: Linux arm64 official relay binary package.
           - ${OVA_NAME}: OVA with OVF network Connection for importers that require it.
-          - ${RAW_NAME}: uncompressed RAW disk image for Aliyun ECS custom image import.
+          - ${RAW_NAME}.tar.xz: RAW disk image packaged as tar.xz for cloud custom image import.
           - main.sh: secure bootstrap script served by https://rels.jinfei.org.
           - install.sh: one-click installer for Debian, Ubuntu, Rocky, Alma, and Alpine.
           - SHA256SUMS: SHA256 checksums for all published artifacts.
-          - trivy-rootfs.json, trivy-fs.json, net-relay-sbom.cdx.json: vulnerability scan reports and CycloneDX SBOM.
+          - trivy-rootfs.json: Alpine rootfs vulnerability scan report.
 
           ## OVA access
 
@@ -546,20 +556,22 @@ jobs:
             git tag "$tag"
             git push origin "$tag"
           fi
+          mapfile -t IMAGE_ASSETS < release/IMAGE_ASSETS.txt
+          image_release_args=()
+          for image_asset in "${IMAGE_ASSETS[@]}"; do
+            image_release_args+=("release/${image_asset}")
+          done
           gh release create "$tag" \
             --title "$tag" \
             "${release_args[@]}" \
             --notes-file release/RELEASE_NOTES.md \
-            "release/${INSTALLER_ARCHIVE_NAME}" \
             "release/${OVA_NAME}" \
-            "release/${RAW_NAME}" \
+            "${image_release_args[@]}" \
             "release/${RELAY_AMD64_PACKAGE}" \
             "release/${RELAY_ARM64_PACKAGE}" \
             "release/main.sh" \
             "release/install.sh" \
             release/trivy-rootfs.json \
-            release/trivy-fs.json \
-            release/net-relay-sbom.cdx.json \
             release/SHA256SUMS
 
       - name: Keep only latest release
