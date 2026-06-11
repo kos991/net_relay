@@ -323,9 +323,11 @@ jobs:
           qemu-img convert -p -O raw ova-build/net-relay-alpine.qcow2 "release/${RAW_NAME}"
 
       - name: Verify RAW BIOS bootability
+        env:
+          LIBGUESTFS_BACKEND: direct
         run: |
           qemu-img info "release/${RAW_NAME}"
-          virt-df -a "release/${RAW_NAME}" | tee ova-build/raw-df.txt
+          sudo -E virt-df -a "release/${RAW_NAME}" | tee ova-build/raw-df.txt
           root_available_mib="$(awk '$1 ~ /\/dev\/sda1$/ {print int($4 / 1024)}' ova-build/raw-df.txt)"
           if [ -z "${root_available_mib}" ] || [ "${root_available_mib}" -lt "${MIN_ROOT_FREE_MIB}" ]; then
             cat ova-build/raw-df.txt
