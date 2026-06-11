@@ -1,9 +1,6 @@
 name: build-ova
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       release_tag:

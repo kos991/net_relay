@@ -25,7 +25,6 @@ OPENRC_SERVICE="${ROOT_DIR}/relay/netbird-relay.openrc"
 LOGIN_CFG="${ROOT_DIR}/ova/files/99-net-relay-login.cfg"
 BUILD_OVA="${ROOT_DIR}/.github/workflows/build-ova.yml"
 VALIDATE_WORKFLOW="${ROOT_DIR}/.github/workflows/validate.yml"
-SYNC_OFFICIAL="${ROOT_DIR}/.github/workflows/sync-official-relay.yml"
 SYSCTL_CONF="${ROOT_DIR}/ova/files/99-net-relay-sysctl.conf"
 SSHD_CONFIG="${ROOT_DIR}/ova/files/sshd_config"
 CADDY_DOCKERFILE="${ROOT_DIR}/caddy/Dockerfile"
@@ -144,6 +143,11 @@ grep -q -- "--cleanup-tag" "$BUILD_OVA"
 grep -q "release_channel" "$BUILD_OVA"
 grep -q "publish_release" "$BUILD_OVA"
 grep -q "github.event.inputs.publish_release != 'false'" "$BUILD_OVA"
+grep -q "workflow_dispatch:" "$BUILD_OVA"
+if grep -Eq "^[[:space:]]+push:|tags:" "$BUILD_OVA"; then
+  echo "build-ova must be manual-only to avoid accidental release workflow runs." >&2
+  exit 1
+fi
 grep -q "v0.1" "$BUILD_OVA"
 grep -q "v1.0" "$BUILD_OVA"
 grep -q -- "--prerelease" "$BUILD_OVA"
@@ -553,12 +557,10 @@ if grep -Fq 'export $(grep' "$OPENRC_SERVICE"; then
   exit 1
 fi
 
-grep -q "name: sync-official-relay" "$SYNC_OFFICIAL"
-grep -q "schedule:" "$SYNC_OFFICIAL"
-grep -q "git ls-remote https://github.com/netbirdio/netbird.git" "$SYNC_OFFICIAL"
-grep -q ".github/netbird-relay-upstream.sha" "$SYNC_OFFICIAL"
-grep -q "gh workflow run build-ova" "$SYNC_OFFICIAL"
-grep -q "netbird_relay_ref" "$SYNC_OFFICIAL"
+if [[ -e "${ROOT_DIR}/.github/workflows/sync-official-relay.yml" ]]; then
+  echo "sync-official-relay workflow must stay disabled; releases are manual only." >&2
+  exit 1
+fi
 
 grep -q "TRIVY_VERSION" "$VALIDATE_WORKFLOW"
 grep -q "TRIVY_CHECKSUM" "$VALIDATE_WORKFLOW"
