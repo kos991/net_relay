@@ -325,8 +325,8 @@ jobs:
       - name: Verify RAW BIOS bootability
         run: |
           qemu-img info "release/${RAW_NAME}"
-          virt-df -m -a "release/${RAW_NAME}" | tee ova-build/raw-df.txt
-          root_available_mib="$(awk '$1 ~ /\/dev\/sda1$/ {print int($4)}' ova-build/raw-df.txt)"
+          virt-df -a "release/${RAW_NAME}" | tee ova-build/raw-df.txt
+          root_available_mib="$(awk '$1 ~ /\/dev\/sda1$/ {print int($4 / 1024)}' ova-build/raw-df.txt)"
           if [ -z "${root_available_mib}" ] || [ "${root_available_mib}" -lt "${MIN_ROOT_FREE_MIB}" ]; then
             cat ova-build/raw-df.txt
             echo "::error::RAW root partition must keep at least ${MIN_ROOT_FREE_MIB} MiB free before cloud first boot."
