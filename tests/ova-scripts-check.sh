@@ -155,13 +155,15 @@ grep -q "tag_prefix" "$BUILD_OVA"
 grep -q "Build official NetBird relay binaries" "$BUILD_OVA"
 grep -q "OVA_NAME" "$BUILD_OVA"
 grep -q "RAW_NAME" "$BUILD_OVA"
+grep -q "QCOW2_NAME" "$BUILD_OVA"
 grep -q "IMAGE_ASSETS" "$BUILD_OVA"
 grep -q "IMAGE_SIZE_MIB" "$BUILD_OVA"
 grep -q "MIN_ROOT_FREE_MIB" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.ova" "$BUILD_OVA"
 grep -q "net-relay-alpine-x86_64.raw" "$BUILD_OVA"
+grep -q "net-relay-alpine-x86_64.qcow2" "$BUILD_OVA"
 if grep -Eqi "VHD_NAME|\\.vhd|fixed VHD|fixed-size VHD|qemu-img convert -p -O vpc" "$BUILD_OVA" "$WORKER"; then
-  echo "VHD release assets are not supported; publish OVA and RAW tar.xz only." >&2
+  echo "VHD release assets are not supported; publish OVA, QCOW2, and RAW tar.xz only." >&2
   exit 1
 fi
 if grep -Eq "raw\\.img\\.gz|gzip -9 release/net-relay-alpine-x86_64\\.raw\\.img|gzip -cd" "$BUILD_OVA"; then
@@ -239,14 +241,17 @@ grep -q "fdisk -l" "$BUILD_OVA"
 grep -q "RAW image is missing a bootable MBR partition" "$BUILD_OVA"
 grep -q "No bootable device" "$BUILD_OVA"
 grep -q "qemu-img convert -p -O raw" "$BUILD_OVA"
+grep -q "qemu-img convert -p -O qcow2" "$BUILD_OVA"
 grep -q "Package RAW tar.xz image" "$BUILD_OVA"
 grep -q "tar -C release -cJf" "$BUILD_OVA"
 grep -q 'rm -f "release/${RAW_NAME}"' "$BUILD_OVA"
 grep -q '"release/${RAW_NAME}"' "$BUILD_OVA"
 grep -q '"$RAW_NAME"' "$BUILD_OVA"
 grep -Fq '"${RAW_NAME}.tar.xz"' "$BUILD_OVA"
-if grep -Eq 'QCOW2_NAME|net-relay-alpine-x86_64\.qcow2\.gz|qemu-img convert -p -O qcow2|release/\$\{QCOW2_NAME\}|\\"\$QCOW2_NAME\\"' "$BUILD_OVA"; then
-  echo "QCOW2 release assets are not supported; publish RAW for cloud import instead." >&2
+grep -q '"release/${QCOW2_NAME}"' "$BUILD_OVA"
+grep -q '"$QCOW2_NAME"' "$BUILD_OVA"
+if grep -Eq 'net-relay-alpine-x86_64\.qcow2\.gz|"\$\{QCOW2_NAME\}\.gz"|"\$QCOW2_NAME\.gz"|qemu-img convert -p -O qcow2 -c|qemu-img convert -p -c -O qcow2' "$BUILD_OVA"; then
+  echo "QCOW2 release asset must be an uncompressed .qcow2 file, not .qcow2.gz or compressed qcow2." >&2
   exit 1
 fi
 grep -q "TRIVY_VERSION" "$BUILD_OVA"
@@ -320,7 +325,7 @@ image_assets = [
     for line in image_assets_block.splitlines()
     if line.strip()
 ]
-expected_image_assets = ['"${RAW_NAME}.tar.xz"']
+expected_image_assets = ['"${RAW_NAME}.tar.xz"', '"$QCOW2_NAME"']
 if image_assets != expected_image_assets:
     print(
         f"Release image assets must be exactly {expected_image_assets}, got {image_assets}.",
