@@ -31,8 +31,8 @@ jobs:
       OVA_NAME: net-relay-alpine-x86_64.ova
       RAW_NAME: net-relay-alpine-x86_64.raw
       QCOW2_NAME: net-relay-alpine-x86_64.qcow2
-      IMAGE_SIZE_MIB: "384"
-      MIN_ROOT_FREE_MIB: "80"
+      IMAGE_SIZE_MIB: "640"
+      MIN_ROOT_FREE_MIB: "256"
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || 'main' }}
@@ -355,7 +355,7 @@ jobs:
               wait "$qemu_pid" || true
               exit 0
             fi
-            if grep -Eq "No bootable device|Boot failed" ova-build/raw-boot.log 2>/dev/null; then
+            if grep -Eq "No bootable device|Boot failed|Error: / needs at least" ova-build/raw-boot.log 2>/dev/null; then
               break
             fi
             sleep 2
