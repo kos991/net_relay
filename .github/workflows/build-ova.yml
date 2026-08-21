@@ -256,10 +256,9 @@ jobs:
           tar -C release -cf "release/${OVA_NAME}" net-relay-alpine-x86_64.ovf net-relay-alpine-x86_64.vmdk
           tar -C release -cf "release/${OVA_MINIMAL_NAME}" net-relay-alpine-x86_64-minimal.ovf net-relay-alpine-x86_64.vmdk
           qemu-img convert -p -O raw ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.raw.img
-          qemu-img convert -p -O vpc -o subformat=fixed,force_size=on ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vhd
+          qemu-img convert -p -O vpc ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vhd
           qemu-img convert -p -O qcow2 -o compat=1.1 ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.qcow2
-          qemu-img info --output=json release/net-relay-alpine-x86_64.vhd | jq -e '.format == "vpc" and .["virtual-size"] >= 3221225472'
-          test "$(stat -c%s release/net-relay-alpine-x86_64.vhd)" -ge 3221225472
+          qemu-img info --output=json release/net-relay-alpine-x86_64.vhd | jq -e '.format == "vpc"'
           qemu-img check release/net-relay-alpine-x86_64.qcow2
           gzip -9 release/net-relay-alpine-x86_64.raw.img
           gzip -9 release/net-relay-alpine-x86_64.vhd
@@ -349,7 +348,7 @@ jobs:
           - ${OVA_NAME}: OVA with OVF network Connection for importers that require it.
           - ${OVA_MINIMAL_NAME}: OVA without OVF network Connection for strict importers that reject it.
           - ${RAW_NAME}: RAW image for cloud import workflows such as Aliyun custom images.
-          - ${VHD_NAME}: Fixed VHD image for cloud import workflows such as Aliyun custom images.
+          - ${VHD_NAME}: VHD image for cloud import workflows such as Aliyun custom images.
           - ${QCOW2_NAME}: Standalone QCOW2 v1.1 image for cloud import workflows such as Aliyun custom images.
           - main.sh: secure bootstrap script served by https://rels.jinfei.org.
           - install.sh: one-click installer for Debian, Ubuntu, Rocky, Alma, and Alpine.

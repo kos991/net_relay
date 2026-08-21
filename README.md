@@ -35,7 +35,7 @@ worker/                  下载入口 Worker
 - 首次登录强制修改 root 密码。
 - SSH 端口写在 Release notes。
 - 首启执行根分区扩容、DHCP 自检、ZRAM 和内核参数优化。
-- 阿里云导入可按控制台要求选择 RAW、固定 VHD 或 QCOW2 镜像。
+- 阿里云导入可按控制台要求选择 RAW、VHD 或 QCOW2 镜像。
 - 暂不支持 LXC/OpenVZ。
 
 ## 许可证
