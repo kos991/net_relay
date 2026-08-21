@@ -30,6 +30,8 @@ jobs:
       OVA_NAME: net-relay-alpine-x86_64.ova
       OVA_MINIMAL_NAME: net-relay-alpine-x86_64-minimal.ova
       RAW_NAME: net-relay-alpine-x86_64.raw.img.gz
+      VHD_NAME: net-relay-alpine-x86_64.vhd.gz
+      QCOW2_NAME: net-relay-alpine-x86_64.qcow2.gz
       INSTALLER_ARCHIVE_NAME: net_relay-main.tar.gz
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
@@ -187,6 +189,7 @@ jobs:
             --copy-in packaging/ova/files/sshd_config:/etc/ssh \
             --copy-in packaging/ova/files/00-net-relay-locale.sh:/etc/profile.d \
             --copy-in packaging/ova/files/virtio-modules.conf:/etc/modules-load.d \
+            --copy-in packaging/ova/files/98-net-relay-datasources.cfg:/etc/cloud/cloud.cfg.d \
             --copy-in packaging/ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --copy-in packaging/ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in packaging/ova/files/root-profile:/root \
@@ -211,7 +214,7 @@ jobs:
             exit "$status"
           fi
 
-      - name: Package OVA release images
+      - name: Package release images
         run: |
           qemu-img convert -p -O vmdk -o subformat=streamOptimized,adapter_type=lsilogic ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vmdk
           vmdk_size="$(stat -c%s release/net-relay-alpine-x86_64.vmdk)"
@@ -253,7 +256,13 @@ jobs:
           tar -C release -cf "release/${OVA_NAME}" net-relay-alpine-x86_64.ovf net-relay-alpine-x86_64.vmdk
           tar -C release -cf "release/${OVA_MINIMAL_NAME}" net-relay-alpine-x86_64-minimal.ovf net-relay-alpine-x86_64.vmdk
           qemu-img convert -p -O raw ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.raw.img
+          qemu-img convert -p -O vpc -o subformat=fixed,force_size=on ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vhd
+          qemu-img convert -p -O qcow2 -o compat=1.1 ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.qcow2
+          qemu-img compare ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vhd
+          qemu-img check release/net-relay-alpine-x86_64.qcow2
           gzip -9 release/net-relay-alpine-x86_64.raw.img
+          gzip -9 release/net-relay-alpine-x86_64.vhd
+          gzip -9 release/net-relay-alpine-x86_64.qcow2
 
       - name: Scan release workspace with Trivy
         run: |
@@ -313,14 +322,14 @@ jobs:
             --ignore-unfixed \
             --exit-code 1 \
             release/net-relay-sbom.cdx.json
-          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh setup-relay.sh reload-relay-certificate.sh trivy-rootfs.json trivy-fs.json net-relay-sbom.cdx.json > SHA256SUMS)
+          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$VHD_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh setup-relay.sh reload-relay-certificate.sh trivy-rootfs.json trivy-fs.json net-relay-sbom.cdx.json > SHA256SUMS)
 
       - name: Write release notes
         run: |
           cat > release/RELEASE_NOTES.md <<EOF
           # NetBird Relay ${{ steps.meta.outputs.release_tag }}
 
-          This release provides official NetBird Relay binaries built from the upstream NetBird source, plus ready-to-import OVA and RAW images.
+          This release provides official NetBird Relay binaries built from the upstream NetBird source, plus ready-to-import OVA, RAW, VHD, and QCOW2 images.
 
           ## Quick install
           \`\`\`bash
@@ -339,6 +348,8 @@ jobs:
           - ${OVA_NAME}: OVA with OVF network Connection for importers that require it.
           - ${OVA_MINIMAL_NAME}: OVA without OVF network Connection for strict importers that reject it.
           - ${RAW_NAME}: RAW image for cloud import workflows such as Aliyun custom images.
+          - ${VHD_NAME}: Fixed VHD image for cloud import workflows such as Aliyun custom images.
+          - ${QCOW2_NAME}: Standalone QCOW2 v1.1 image for cloud import workflows such as Aliyun custom images.
           - main.sh: secure bootstrap script served by https://rels.jinfei.org.
           - install.sh: one-click installer for Debian, Ubuntu, Rocky, Alma, and Alpine.
           - setup-relay.sh: binary Relay configuration wizard.
@@ -388,6 +399,8 @@ jobs:
             "release/${OVA_NAME}" \
             "release/${OVA_MINIMAL_NAME}" \
             "release/${RAW_NAME}" \
+            "release/${VHD_NAME}" \
+            "release/${QCOW2_NAME}" \
             "release/${RELAY_AMD64_PACKAGE}" \
             "release/${RELAY_ARM64_PACKAGE}" \
             "release/main.sh" \
