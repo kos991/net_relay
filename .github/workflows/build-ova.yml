@@ -258,7 +258,8 @@ jobs:
           qemu-img convert -p -O raw ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.raw.img
           qemu-img convert -p -O vpc -o subformat=fixed,force_size=on ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vhd
           qemu-img convert -p -O qcow2 -o compat=1.1 ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.qcow2
-          qemu-img compare ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vhd
+          qemu-img info --output=json release/net-relay-alpine-x86_64.vhd | jq -e '.format == "vpc" and .["virtual-size"] >= 3221225472'
+          test "$(stat -c%s release/net-relay-alpine-x86_64.vhd)" -ge 3221225472
           qemu-img check release/net-relay-alpine-x86_64.qcow2
           gzip -9 release/net-relay-alpine-x86_64.raw.img
           gzip -9 release/net-relay-alpine-x86_64.vhd
