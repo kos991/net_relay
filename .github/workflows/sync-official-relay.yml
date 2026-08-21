@@ -24,8 +24,8 @@ jobs:
           latest_tag="$(
             git ls-remote https://github.com/netbirdio/netbird.git "refs/tags/v*" \
               | awk '{print $2}' \
-              | sed 's#refs/tags/##; s#\\^{}##' \
-              | grep -E '^v[0-9]+\\.[0-9]+\\.[0-9]+$' \
+              | sed 's#refs/tags/##; s#\^{}##' \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
               | sort -V \
               | tail -1
           )"
