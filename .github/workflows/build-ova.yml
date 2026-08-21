@@ -279,6 +279,7 @@ jobs:
             --scanners vuln,secret,misconfig \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
+            --ignorefile .trivyignore.yaml \
             --exit-code 1 \
             --format json \
             --output release/trivy-fs.json \

@@ -55,6 +55,7 @@ jobs:
             --scanners vuln,secret,misconfig \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
+            --ignorefile .trivyignore.yaml \
             --exit-code 1 \
             .
 
