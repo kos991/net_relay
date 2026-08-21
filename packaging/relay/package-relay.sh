@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DIST_DIR="${DIST_DIR:-${ROOT_DIR}/dist}"
 PACKAGE_DIR="${PACKAGE_DIR:-${ROOT_DIR}/release}"
 TARGET_OS="${TARGET_OS:-linux}"
@@ -29,8 +29,8 @@ mkdir -p \
   "$PACKAGE_DIR"
 
 cp "$binary" "${staging_dir}/netbird-relay/bin/netbird-relay"
-cp "${ROOT_DIR}/relay/netbird-relay.service" "${staging_dir}/netbird-relay/services/netbird-relay.service"
-cp "${ROOT_DIR}/relay/netbird-relay.openrc" "${staging_dir}/netbird-relay/services/netbird-relay.openrc"
+cp "${ROOT_DIR}/packaging/relay/netbird-relay.service" "${staging_dir}/netbird-relay/services/netbird-relay.service"
+cp "${ROOT_DIR}/packaging/relay/netbird-relay.openrc" "${staging_dir}/netbird-relay/services/netbird-relay.openrc"
 
 cat > "${staging_dir}/netbird-relay/VERSION" <<EOF
 NETBIRD_RELAY_REF=${NETBIRD_RELAY_REF}

@@ -3,42 +3,43 @@ set -euo pipefail
 [[ "${TRACE_CHECKS:-0}" == "1" ]] && set -x
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-FIRSTBOOT="${ROOT_DIR}/ova/files/net-relay-firstboot"
-RELS="${ROOT_DIR}/ova/files/rels"
-SETUP="${ROOT_DIR}/setup-relay.sh"
-INSTALL="${ROOT_DIR}/install.sh"
+FIRSTBOOT="${ROOT_DIR}/packaging/ova/files/net-relay-firstboot"
+RELS="${ROOT_DIR}/packaging/ova/files/rels"
+SETUP="${ROOT_DIR}/scripts/installer/setup-relay.sh"
+INSTALL="${ROOT_DIR}/scripts/installer/install.sh"
+ROOT_SETUP="${ROOT_DIR}/setup-relay.sh"
+ROOT_INSTALL="${ROOT_DIR}/install.sh"
+CERT_RELOAD="${ROOT_DIR}/scripts/certificate/reload-relay-certificate.sh"
 MAIN="${ROOT_DIR}/main.sh"
-ROOT_PROFILE="${ROOT_DIR}/ova/files/root-profile"
-LOCALE_PROFILE="${ROOT_DIR}/ova/files/00-net-relay-locale.sh"
+ROOT_PROFILE="${ROOT_DIR}/packaging/ova/files/root-profile"
+LOCALE_PROFILE="${ROOT_DIR}/packaging/ova/files/00-net-relay-locale.sh"
 WORKER="${ROOT_DIR}/worker/rels-worker.js"
-ZRAM_SETUP="${ROOT_DIR}/ova/files/setup-zram"
-KERNEL_TUNING="${ROOT_DIR}/ova/files/setup-kernel-tuning"
-ROOT_RESIZE="${ROOT_DIR}/ova/files/setup-root-resize"
-NETWORK_CHECK="${ROOT_DIR}/ova/files/setup-network-check"
-VIRTIO_MODULES="${ROOT_DIR}/ova/files/virtio-modules.conf"
-BUILD_RELAY="${ROOT_DIR}/relay/build-relay.sh"
-PACKAGE_RELAY="${ROOT_DIR}/relay/package-relay.sh"
-SYSTEMD_SERVICE="${ROOT_DIR}/relay/netbird-relay.service"
-OPENRC_SERVICE="${ROOT_DIR}/relay/netbird-relay.openrc"
-LOGIN_CFG="${ROOT_DIR}/ova/files/99-net-relay-login.cfg"
+ZRAM_SETUP="${ROOT_DIR}/packaging/ova/files/setup-zram"
+KERNEL_TUNING="${ROOT_DIR}/packaging/ova/files/setup-kernel-tuning"
+ROOT_RESIZE="${ROOT_DIR}/packaging/ova/files/setup-root-resize"
+NETWORK_CHECK="${ROOT_DIR}/packaging/ova/files/setup-network-check"
+VIRTIO_MODULES="${ROOT_DIR}/packaging/ova/files/virtio-modules.conf"
+BUILD_RELAY="${ROOT_DIR}/packaging/relay/build-relay.sh"
+PACKAGE_RELAY="${ROOT_DIR}/packaging/relay/package-relay.sh"
+SYSTEMD_SERVICE="${ROOT_DIR}/packaging/relay/netbird-relay.service"
+OPENRC_SERVICE="${ROOT_DIR}/packaging/relay/netbird-relay.openrc"
+LOGIN_CFG="${ROOT_DIR}/packaging/ova/files/99-net-relay-login.cfg"
 BUILD_OVA="${ROOT_DIR}/.github/workflows/build-ova.yml"
 VALIDATE_WORKFLOW="${ROOT_DIR}/.github/workflows/validate.yml"
 SYNC_OFFICIAL="${ROOT_DIR}/.github/workflows/sync-official-relay.yml"
 TRIVY_IGNORE="${ROOT_DIR}/.trivyignore.yaml"
-SYSCTL_CONF="${ROOT_DIR}/ova/files/99-net-relay-sysctl.conf"
-SSHD_CONFIG="${ROOT_DIR}/ova/files/sshd_config"
-CADDY_DOCKERFILE="${ROOT_DIR}/caddy/Dockerfile"
-SYNC_DOCKERFILE="${ROOT_DIR}/sync/Dockerfile"
-SYNC_CERTS_SCRIPT="${ROOT_DIR}/sync/sync-relay-certs.sh"
-RELAY_DOCKERFILE="${ROOT_DIR}/relay/Dockerfile"
+SYSCTL_CONF="${ROOT_DIR}/packaging/ova/files/99-net-relay-sysctl.conf"
+SSHD_CONFIG="${ROOT_DIR}/packaging/ova/files/sshd_config"
 
 bash -n "$FIRSTBOOT"
 bash -n "$RELS"
 bash -n "$SETUP"
 bash -n "$INSTALL"
+bash -n "$ROOT_SETUP"
+bash -n "$ROOT_INSTALL"
+bash -n "$CERT_RELOAD"
 bash -n "$BUILD_RELAY"
 bash -n "$PACKAGE_RELAY"
-bash -n "$SYNC_CERTS_SCRIPT"
 bash -n "$ZRAM_SETUP"
 bash -n "$KERNEL_TUNING"
 bash -n "$ROOT_RESIZE"
@@ -95,22 +96,15 @@ grep -q "systemctl enable --now netbird-relay" "$SETUP"
 grep -q "rc-update add netbird-relay default" "$SETUP"
 grep -q "ensure_service_user" "$SETUP"
 grep -q "mask_secret" "$SETUP"
-grep -q "DEPLOY_MODE" "$SETUP"
-grep -q "write_compose_file" "$SETUP"
-grep -q "docker compose -f" "$SETUP"
-grep -q "RELAY_IMAGE" "$SETUP"
-grep -q "CADDY_IMAGE" "$SETUP"
-grep -q "SYNC_IMAGE" "$SETUP"
-grep -q "COMPOSE_STACK_ENV_FILE" "$SETUP"
-grep -q "crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:relay" "$SETUP"
-grep -q "crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:caddy" "$SETUP"
-grep -q "crpi-9kn2o1el6okkk1mu.cn-shanghai.personal.cr.aliyuncs.com/netrels/netrels:sync" "$SETUP"
-grep -q "netbird-caddy-cert" "$SETUP"
-grep -q "netbird-relay-cert-sync" "$SETUP"
-if grep -q "image: netbirdio/relay" "$SETUP"; then
-  echo "Compose mode must default to the Aliyun custom relay image, not Docker Hub netbirdio/relay." >&2
-  exit 1
-fi
+grep -q "NB_HEALTH_LISTEN_ADDRESS=127.0.0.1:9000" "$SETUP"
+grep -q "NB_METRICS_PORT=9090" "$SETUP"
+grep -q "Relay and STUN cannot share the same UDP port" "$SETUP"
+grep -q "CERT_RELOAD_HOOK" "$SETUP"
+grep -q "certificate and private key do not match" "$CERT_RELOAD"
+grep -q "systemctl restart netbird-relay" "$CERT_RELOAD"
+grep -q "rc-service netbird-relay restart" "$CERT_RELOAD"
+grep -q 'scripts/installer/install.sh' "$ROOT_INSTALL"
+grep -q 'scripts/installer/setup-relay.sh' "$ROOT_SETUP"
 
 grep -q "root-password-confirmed" "$ROOT_PROFILE"
 grep -q "ROOT_PASSWORD_CONFIRM_FLAG" "$ROOT_PROFILE"
@@ -122,16 +116,25 @@ grep -q "LC_ALL=C.UTF-8" "$LOCALE_PROFILE"
 grep -q "TZ=Asia/Shanghai" "$LOCALE_PROFILE"
 
 grep -q "chage -d 0 root" "$BUILD_OVA"
-grep -q "Keep only latest release" "$BUILD_OVA"
-grep -q "gh release delete" "$BUILD_OVA"
-grep -q -- "--cleanup-tag" "$BUILD_OVA"
 grep -q "release_channel" "$BUILD_OVA"
 grep -q "publish_release" "$BUILD_OVA"
 grep -q "github.event.inputs.publish_release != 'false'" "$BUILD_OVA"
-grep -q "v0.1" "$BUILD_OVA"
 grep -q "v1.0" "$BUILD_OVA"
-grep -q -- "--prerelease" "$BUILD_OVA"
 grep -q "tag_prefix" "$BUILD_OVA"
+grep -q 'tags:' "$BUILD_OVA"
+grep -q '"v1.\*"' "$BUILD_OVA"
+grep -q "release/setup-relay.sh" "$BUILD_OVA"
+grep -q "release/reload-relay-certificate.sh" "$BUILD_OVA"
+grep -q "Resolve NetBird relay ref" "$BUILD_OVA"
+grep -q ".github/netbird-relay-upstream.sha" "$BUILD_OVA"
+if grep -Eq 'gh release delete|--cleanup-tag' "$BUILD_OVA"; then
+  echo "Stable release history must not be deleted by the build workflow." >&2
+  exit 1
+fi
+if grep -Eq 'v0\.|--prerelease|release_channel.*test' "$BUILD_OVA"; then
+  echo "Release workflow must publish stable v1.0.N releases only." >&2
+  exit 1
+fi
 grep -q "Build official NetBird relay binaries" "$BUILD_OVA"
 grep -q "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/cloud/" "$BUILD_OVA"
 if grep -q "dev.alpinelinux.org/~tomalok" "$BUILD_OVA"; then
@@ -299,32 +302,14 @@ grep -q "vm.page-cluster = 0" "$SYSCTL_CONF"
 
 grep -q "detect_os" "$INSTALL"
 grep -q "detect_arch" "$INSTALL"
-grep -q "detect_install_mode" "$INSTALL"
-grep -q "select_install_mode" "$INSTALL"
-grep -q "Select install mode" "$INSTALL"
-grep -q "Official binary install" "$INSTALL"
-grep -q "Docker Compose" "$INSTALL"
+grep -q "validate_args" "$INSTALL"
 grep -q "download_relay_package" "$INSTALL"
 grep -q "verify_sha256" "$INSTALL"
 grep -q "install_relay_binary" "$INSTALL"
-grep -q "install_compose_dependencies" "$INSTALL"
-grep -q "INSTALL_MODE" "$INSTALL"
-grep -q "compose" "$INSTALL"
-grep -q "enforce_install_mode_policy" "$INSTALL"
-grep -q "Alpine uses official binary mode" "$INSTALL"
-awk '
-  /^main\(\) \{/ { in_main=1 }
-  in_main && /enforce_install_mode_policy/ { policy=NR }
-  in_main && /select_install_mode/ { menu=NR }
-  END {
-    if (!policy || !menu || policy > menu) {
-      print "Alpine policy must run before the install mode menu is shown." > "/dev/stderr"
-      exit 1
-    }
-  }
-' "$INSTALL"
-if grep -q "docker-cli-compose" "$INSTALL"; then
-  echo "Alpine installer must not install Docker Compose; Alpine uses binary mode only." >&2
+grep -q "install_installer_asset" "$INSTALL"
+grep -q "reload-relay-certificate.sh" "$INSTALL"
+if grep -Eq 'install_compose_dependencies|docker\.io|docker-cli-compose|docker-compose-plugin|docker compose version' "$INSTALL"; then
+  echo "Installer must not install or run Docker/Compose." >&2
   exit 1
 fi
 grep -q "netbird-relay-linux-\${arch}.tar.gz" "$INSTALL"
@@ -359,7 +344,7 @@ grep -q "verify_install_sha256" "$MAIN"
 grep -q "actual_hash" "$MAIN"
 grep -q "SHA256SUMS" "$MAIN"
 grep -q "curl -sSL https://rels.jinfei.org | sh" "${ROOT_DIR}/README.md"
-grep -q "镜像不内置 Docker/Compose" "${ROOT_DIR}/README.md"
+grep -q "镜像不内置 Docker、Compose 或 Caddy" "${ROOT_DIR}/README.md"
 grep -q "GPL-3.0" "${ROOT_DIR}/README.md"
 grep -q "GNU GENERAL PUBLIC LICENSE" "${ROOT_DIR}/LICENSE"
 grep -q 'proxyAsset("main.sh", false)' "$WORKER"
@@ -427,27 +412,20 @@ grep -q -- "--ignorefile .trivyignore.yaml" "$VALIDATE_WORKFLOW"
 grep -q "Scan relay source with govulncheck" "$VALIDATE_WORKFLOW"
 grep -q "go install golang.org/x/vuln/cmd/govulncheck" "$VALIDATE_WORKFLOW"
 grep -q "CRITICAL,HIGH" "$VALIDATE_WORKFLOW"
-grep -q "AVD-DS-0002" "$TRIVY_IGNORE"
-grep -q '"caddy/Dockerfile"' "$TRIVY_IGNORE"
-grep -q '"relay/Dockerfile"' "$TRIVY_IGNORE"
-grep -q '"sync/Dockerfile"' "$TRIVY_IGNORE"
+grep -q "misconfigurations: \[\]" "$TRIVY_IGNORE"
 
-grep -q "github.com/caddy-dns/cloudflare" "$CADDY_DOCKERFILE"
-grep -q "COPY --from=builder /usr/bin/caddy /usr/bin/caddy" "$CADDY_DOCKERFILE"
-grep -q "sync-relay-certs.sh" "$SYNC_DOCKERFILE"
-grep -q "curl" "$SYNC_DOCKERFILE"
-grep -q "RELAY_DOMAIN" "$SYNC_CERTS_SCRIPT"
-grep -q "/var/run/docker.sock" "$SYNC_CERTS_SCRIPT"
-grep -q "restart_relay" "$SYNC_CERTS_SCRIPT"
-grep -q "FROM netbirdio/relay:latest" "$RELAY_DOCKERFILE"
-
-if [[ -e "${ROOT_DIR}/.github/workflows/sync-acr-relay-image.yml" ]]; then
-  echo "relay image must be built by Aliyun ACR from relay/Dockerfile, not synced by GitHub Actions." >&2
+if find "$ROOT_DIR" -path "$ROOT_DIR/.git" -prune -o -path "$ROOT_DIR/.build" -prune -o -path "$ROOT_DIR/.worktrees" -prune -o -path "$ROOT_DIR/.tmp-release" -prune -o -path "$ROOT_DIR/.cospec" -prune -o -path "$ROOT_DIR/netbird" -prune -o -name Dockerfile -print | grep -q .; then
+  echo "Repository must not contain Docker image definitions." >&2
   exit 1
 fi
 
 if grep -Eq "install_docker|docker-compose-plugin|docker-cli-compose|docker compose|docker-compose|netbirdio/relay" "$FIRSTBOOT" "$RELS" "$ZRAM_SETUP" "$KERNEL_TUNING" "$ROOT_RESIZE" "$NETWORK_CHECK"; then
   echo "OVA image scripts must not install or require Docker." >&2
+  exit 1
+fi
+
+if grep -Eqi "caddy|sync-relay-certs|netbirdio/relay|docker compose" "$SETUP" "$CERT_RELOAD" "$BUILD_OVA"; then
+  echo "Binary deployment and release workflow must not contain Caddy or container runtime paths." >&2
   exit 1
 fi
 

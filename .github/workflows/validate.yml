@@ -46,8 +46,8 @@ jobs:
         run: |
           ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].each { |f| YAML.load_file(f); puts "parsed #{f}" }'
 
-      - name: Check OVA and installer scripts
-        run: bash tests/ova-scripts-check.sh
+      - name: Check release and installer scripts
+        run: bash tests/release-check.sh
 
       - name: Scan repository with Trivy
         run: |
@@ -62,7 +62,7 @@ jobs:
       - name: Scan relay source with govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          BUILD_DIR="${PWD}/.build/netbird" NETBIRD_RELAY_REF=main bash relay/build-relay.sh
+          BUILD_DIR="${PWD}/.build/netbird" NETBIRD_RELAY_REF=main bash packaging/relay/build-relay.sh
           (cd .build/netbird && govulncheck ./relay)
 
       - name: Check whitespace

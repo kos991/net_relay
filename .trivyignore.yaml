@@ -1,13 +1,1 @@
-misconfigurations:
-  - id: AVD-DS-0002
-    paths:
-      - "caddy/Dockerfile"
-    statement: Caddy requires root to bind ports 80/443 and manage its mounted data directories.
-  - id: AVD-DS-0002
-    paths:
-      - "relay/Dockerfile"
-    statement: This wrapper inherits the runtime identity and permissions from the official NetBird Relay image.
-  - id: AVD-DS-0002
-    paths:
-      - "sync/Dockerfile"
-    statement: Certificate sync requires access to the host Docker socket and deployment-owned certificate mounts.
+misconfigurations: []

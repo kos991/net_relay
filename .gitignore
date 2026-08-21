@@ -2,8 +2,6 @@
 relay.env
 data/
 certs/
-docker-compose.yml
-caddy/Caddyfile
 .worktrees/
 logs/
 .claude/
