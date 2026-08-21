@@ -398,6 +398,7 @@ RELAY_AUTH_SECRET="$(read_relay_auth_secret)"
 
 validate_port "$RELAY_PORT" || fail "Invalid Relay port: ${RELAY_PORT}"
 validate_port "$STUN_PORT" || fail "Invalid STUN port: ${STUN_PORT}"
+(( RELAY_PORT >= 1024 )) || fail "Relay port must be 1024 or higher because the service runs without root privileges."
 [[ "$RELAY_PORT" != "$STUN_PORT" ]] || fail "Relay and STUN cannot share the same UDP port."
 [[ "$RELAY_PORT" != "9000" && "$RELAY_PORT" != "9090" ]] || fail "Relay port 9000 and 9090 are reserved for local health and metrics endpoints."
 
