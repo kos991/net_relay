@@ -331,7 +331,7 @@ grep -q "cron" "$INSTALL"
 
 grep -q "NETBIRD_RELAY_REF" "$BUILD_RELAY"
 grep -q "GO_SECURITY_PATCH_MODULES" "$BUILD_RELAY"
-grep -q "golang.org/x/net@v0.55.0" "$BUILD_RELAY"
+grep -q "golang.org/x/net@v0.58.0" "$BUILD_RELAY"
 grep -q "go get \"\${security_patch_modules\\[@\\]}\"" "$BUILD_RELAY"
 grep -q "https://github.com/netbirdio/netbird.git" "$BUILD_RELAY"
 grep -q "go build" "$BUILD_RELAY"
