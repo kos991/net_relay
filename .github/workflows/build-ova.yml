@@ -30,7 +30,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      ALPINE_IMAGE_URL: https://dev.alpinelinux.org/~tomalok/alpine-cloud-images/v3.23/nocloud/x86_64/nocloud_alpine-3.23.4-x86_64-bios-cloudinit-r0.qcow2
+      ALPINE_IMAGE_URL: https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/cloud/nocloud_alpine-3.23.4-x86_64-bios-cloudinit-r0.qcow2
       OVA_NAME: net-relay-alpine-x86_64.ova
       OVA_MINIMAL_NAME: net-relay-alpine-x86_64-minimal.ova
       RAW_NAME: net-relay-alpine-x86_64.raw.img.gz

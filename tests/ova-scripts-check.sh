@@ -132,6 +132,11 @@ grep -q "v1.0" "$BUILD_OVA"
 grep -q -- "--prerelease" "$BUILD_OVA"
 grep -q "tag_prefix" "$BUILD_OVA"
 grep -q "Build official NetBird relay binaries" "$BUILD_OVA"
+grep -q "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/cloud/" "$BUILD_OVA"
+if grep -q "dev.alpinelinux.org/~tomalok" "$BUILD_OVA"; then
+  echo "OVA builds must use Alpine's official release CDN, not the retired developer image path." >&2
+  exit 1
+fi
 grep -q "OVA_NAME" "$BUILD_OVA"
 grep -q "OVA_MINIMAL_NAME" "$BUILD_OVA"
 grep -q "RAW_NAME" "$BUILD_OVA"
