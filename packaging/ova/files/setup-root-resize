@@ -2,7 +2,7 @@
 set -euo pipefail
 
 log() {
-  echo "root-resize: $*"
+  echo "根分区扩容：$*"
 }
 
 apt_run() {
@@ -14,7 +14,7 @@ apt_run() {
 }
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "error: please run as root" >&2
+  echo "错误：请使用 root 运行" >&2
   exit 1
 fi
 
@@ -35,7 +35,7 @@ root_source="$(findmnt -n -o SOURCE /)"
 root_fs="$(findmnt -n -o FSTYPE /)"
 
 if [[ -z "$root_source" || "$root_source" != /dev/* ]]; then
-  log "skip: root source is not a block partition (${root_source:-unknown})"
+  log "跳过：根目录来源不是块设备分区（${root_source:-未知}）"
   exit 0
 fi
 
@@ -44,7 +44,7 @@ disk_name="$(lsblk -no PKNAME "$root_source" 2>/dev/null | head -n 1 || true)"
 part_number="$(cat "/sys/class/block/${partition_name}/partition" 2>/dev/null || true)"
 
 if [[ -z "$disk_name" || -z "$part_number" ]]; then
-  log "skip: unable to detect parent disk or partition number for $root_source"
+  log "跳过：无法检测 $root_source 对应的父磁盘或分区号"
   exit 0
 fi
 
@@ -52,12 +52,12 @@ disk="/dev/${disk_name}"
 install_resize_tools
 
 if command -v growpart >/dev/null 2>&1; then
-  log "expanding ${disk} partition ${part_number}"
+  log "正在扩展 ${disk} 的分区 ${part_number}"
   growpart "$disk" "$part_number" || true
   partprobe "$disk" 2>/dev/null || true
   blockdev --rereadpt "$disk" 2>/dev/null || true
 else
-  log "skip partition growth: growpart is unavailable"
+  log "跳过分区扩容：未找到 growpart"
 fi
 
 case "$root_fs" in
@@ -71,7 +71,7 @@ case "$root_fs" in
     btrfs filesystem resize max / || true
     ;;
   *)
-    log "skip filesystem growth: unsupported filesystem ${root_fs:-unknown}"
+    log "跳过文件系统扩容：不支持的文件系统 ${root_fs:-未知}"
     ;;
 esac
 

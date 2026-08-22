@@ -4,16 +4,16 @@ set -euo pipefail
 SYSCTL_CONF="/etc/sysctl.d/99-net-relay-sysctl.conf"
 
 log() {
-  echo "kernel-tuning: $*"
+  echo "内核调优：$*"
 }
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "Error: please run as root" >&2
+  echo "错误：请使用 root 运行" >&2
   exit 1
 fi
 
 if [[ ! -f "$SYSCTL_CONF" ]]; then
-  echo "Error: ${SYSCTL_CONF} was not found" >&2
+  echo "错误：未找到 ${SYSCTL_CONF}" >&2
   exit 1
 fi
 

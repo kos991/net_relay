@@ -89,6 +89,10 @@ grep -q "setup-root-resize" "$FIRSTBOOT"
 grep -q "setup-network-check" "$FIRSTBOOT"
 grep -q "setup-zram" "$FIRSTBOOT"
 grep -q "setup-kernel-tuning" "$FIRSTBOOT"
+grep -q "根分区扩容：" "$ROOT_RESIZE"
+grep -q "网络自检：" "$NETWORK_CHECK"
+grep -q "ZRAM：" "$ZRAM_SETUP"
+grep -q "内核调优：" "$KERNEL_TUNING"
 
 grep -q "NetBird Relay" "$RELS"
 grep -q "show_certificate_status" "$RELS"
@@ -443,7 +447,7 @@ if grep -q "Relay auth secret: \${RELAY_AUTH_SECRET}" "$SETUP"; then
 fi
 
 if LC_ALL=C.UTF-8 grep -R -n "[一-龥]" \
-  "$RELS" "$ZRAM_SETUP" "$KERNEL_TUNING" "$LOCALE_PROFILE"; then
+  "$RELS" "$LOCALE_PROFILE"; then
   echo "OVA utility scripts must remain ASCII/English only." >&2
   exit 1
 fi

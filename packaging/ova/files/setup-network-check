@@ -2,11 +2,11 @@
 set -euo pipefail
 
 log() {
-  echo "network-check: $*"
+  echo "网络自检：$*"
 }
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "error: please run as root" >&2
+  echo "错误：请使用 root 运行" >&2
   exit 1
 fi
 
@@ -64,32 +64,32 @@ persist_modules
 load_modules
 
 if ! command -v ip >/dev/null 2>&1; then
-  log "skip DHCP check: ip command is unavailable"
+  log "跳过 DHCP 检查：未找到 ip 命令"
   exit 0
 fi
 
 mapfile -t interfaces < <(detect_interfaces)
 if [[ "${#interfaces[@]}" -eq 0 ]]; then
-  log "warning: no non-loopback network interface detected"
+  log "警告：未检测到非回环网络接口"
   exit 0
 fi
 
 if ip route | grep -q '^default '; then
-  log "default route already present"
+  log "默认路由已存在"
   ip -br addr || true
   exit 0
 fi
 
 for iface in "${interfaces[@]}"; do
-  log "requesting DHCP lease on ${iface}"
+  log "正在通过 ${iface} 请求 DHCP 租约"
   try_dhcp "$iface"
   if ip route | grep -q '^default '; then
-    log "default route acquired on ${iface}"
+    log "已通过 ${iface} 获取默认路由"
     ip -br addr || true
     exit 0
   fi
 done
 
-log "warning: DHCP did not provide a default route"
+log "警告：DHCP 未提供默认路由"
 ip -br addr || true
 ip route || true

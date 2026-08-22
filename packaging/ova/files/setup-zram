@@ -2,7 +2,7 @@
 set -euo pipefail
 
 log() {
-  echo "zram: $*"
+  echo "ZRAM：$*"
 }
 
 apt_run() {
@@ -15,7 +15,7 @@ apt_run() {
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
-    echo "Error: required command is missing: $1" >&2
+    echo "错误：缺少必需命令：$1" >&2
     exit 1
   }
 }
@@ -38,7 +38,7 @@ for i in 1 2 3 4 5; do
   [[ -b /dev/zram0 ]] && break
   sleep 1
 done
-[[ -b /dev/zram0 ]] || { echo "Error: /dev/zram0 was not created" >&2; exit 1; }
+[[ -b /dev/zram0 ]] || { echo "错误：未创建 /dev/zram0" >&2; exit 1; }
 swapoff /dev/zram0 2>/dev/null || true
 echo 1 > /sys/block/zram0/reset 2>/dev/null || true
 echo ${BEST_ALGO} > /sys/block/zram0/comp_algorithm
@@ -80,7 +80,7 @@ EOF
 
 verify_zram_swap() {
   if ! swapon --show=NAME --noheadings 2>/dev/null | awk '$1 == "/dev/zram0" {found=1} END {exit !found}'; then
-    echo "Error: /dev/zram0 swap is not active" >&2
+    echo "错误：/dev/zram0 swap 未启用" >&2
     zramctl 2>/dev/null || true
     swapon --show 2>/dev/null || true
     return 1
@@ -88,7 +88,7 @@ verify_zram_swap() {
 }
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "Error: please run as root" >&2
+  echo "错误：请使用 root 运行" >&2
   exit 1
 fi
 
@@ -97,7 +97,7 @@ if [[ -f /etc/alpine-release ]]; then
 elif [[ -f /etc/debian_version ]]; then
   OS="debian"
 else
-  echo "Error: this operating system is not supported" >&2
+  echo "错误：不支持当前操作系统" >&2
   exit 1
 fi
 
@@ -166,7 +166,7 @@ cat > /usr/local/bin/zram-optimize.sh <<'EOF'
 set -euo pipefail
 if [[ -f /sys/block/zram0/compact ]]; then
   echo 1 > /sys/block/zram0/compact
-  echo "[$(date)] ZRAM compact completed"
+  echo "[$(date)] ZRAM 压缩整理完成"
 fi
 EOF
 chmod +x /usr/local/bin/zram-optimize.sh
