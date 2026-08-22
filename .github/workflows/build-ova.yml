@@ -153,10 +153,20 @@ jobs:
       - name: Fetch Alpine OVA runtime packages
         run: |
           mkdir -p ova-build/apks
+          BASE_APK_PACKAGES="$(sudo virt-cat -a ova-build/alpine.qcow2 /lib/apk/db/installed \
+            | awk -F: '$1 == "P" {print $2}' \
+            | sort -u \
+            | tr '\n' ' ')"
+          [[ -n "${BASE_APK_PACKAGES}" ]] || {
+            echo "::error::Unable to read the Alpine base package database"
+            exit 1
+          }
           docker run --rm \
+            -e "OVA_APK_PACKAGES=${OVA_APK_PACKAGES}" \
+            -e "BASE_APK_PACKAGES=${BASE_APK_PACKAGES}" \
             -v "$PWD/ova-build/apks:/apks" \
             alpine:3.23 \
-            sh -ec "apk update && cd /apks && apk fetch --recursive ${OVA_APK_PACKAGES}"
+            sh -ec 'apk update && cd /apks && apk fetch --recursive ${OVA_APK_PACKAGES} ${BASE_APK_PACKAGES}'
 
       - name: Customize Alpine OVA image
         env:
