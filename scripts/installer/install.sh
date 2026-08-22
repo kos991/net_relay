@@ -302,17 +302,17 @@ download_relay_package() {
 
 install_relay_binary() {
   local package_file="$1"
-  local tmp_dir
-  tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "$tmp_dir"' RETURN
+  local binary_tmp_dir
+  binary_tmp_dir="$(mktemp -d)"
+  trap "rm -rf -- '$binary_tmp_dir'" RETURN
 
   verify_tar_paths "$package_file"
-  tar -xzf "$package_file" -C "$tmp_dir"
-  [[ -x "${tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "$(msg missing_binary)"
+  tar -xzf "$package_file" -C "$binary_tmp_dir"
+  [[ -x "${binary_tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "$(msg missing_binary)"
 
-  run_as_root install -m 0755 -D "${tmp_dir}/netbird-relay/bin/netbird-relay" "$BIN_PATH"
-  run_as_root install -m 0644 -D "${tmp_dir}/netbird-relay/services/netbird-relay.service" /etc/systemd/system/netbird-relay.service
-  run_as_root install -m 0755 -D "${tmp_dir}/netbird-relay/services/netbird-relay.openrc" /etc/init.d/netbird-relay
+  run_as_root install -m 0755 -D "${binary_tmp_dir}/netbird-relay/bin/netbird-relay" "$BIN_PATH"
+  run_as_root install -m 0644 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.service" /etc/systemd/system/netbird-relay.service
+  run_as_root install -m 0755 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.openrc" /etc/init.d/netbird-relay
 }
 
 install_installer_asset() {
@@ -348,7 +348,7 @@ install_installer_files() {
   install_installer_asset "$source_dir/setup-relay.sh" setup-relay.sh "$INSTALL_DIR/setup-relay.sh" "$sums_file" 0755
   install_installer_asset "$source_dir/reload-relay-certificate.sh" reload-relay-certificate.sh /usr/local/libexec/netbird-relay/reload-relay-certificate.sh "$sums_file" 0755
   if [[ "$source_file" != "$INSTALL_DIR/install.sh" ]]; then
-    run_as_root install -m 0755 -D "$source_file" "$INSTALL_DIR/install.sh"
+    install_installer_asset "$source_file" install.sh "$INSTALL_DIR/install.sh" "$sums_file" 0755
   fi
 }
 
@@ -363,7 +363,7 @@ main() {
   local arch package_file tmp_dir
   arch="$(detect_arch)"
   tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "$tmp_dir"' EXIT
+  trap 'rm -rf -- "${tmp_dir:-}"' EXIT
 
   package_file="$(download_relay_package "$arch" "$tmp_dir")"
   install_relay_binary "$package_file"
