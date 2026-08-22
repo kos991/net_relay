@@ -340,14 +340,15 @@ install_installer_asset() {
 
 install_installer_files() {
   local sums_file="$1"
+  local source_file="${BASH_SOURCE[0]}"
   local source_dir
-  source_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  source_dir="$(cd "$(dirname "$source_file")" && pwd)"
 
   run_as_root mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
   install_installer_asset "$source_dir/setup-relay.sh" setup-relay.sh "$INSTALL_DIR/setup-relay.sh" "$sums_file" 0755
   install_installer_asset "$source_dir/reload-relay-certificate.sh" reload-relay-certificate.sh /usr/local/libexec/netbird-relay/reload-relay-certificate.sh "$sums_file" 0755
-  if [[ "$source_dir/install.sh" != "$INSTALL_DIR/install.sh" ]]; then
-    run_as_root install -m 0755 -D "$source_dir/install.sh" "$INSTALL_DIR/install.sh"
+  if [[ "$source_file" != "$INSTALL_DIR/install.sh" ]]; then
+    run_as_root install -m 0755 -D "$source_file" "$INSTALL_DIR/install.sh"
   fi
 }
 
