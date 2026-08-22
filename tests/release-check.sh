@@ -477,6 +477,11 @@ grep -q "git ls-remote https://github.com/netbirdio/netbird.git" "$SYNC_OFFICIAL
 grep -q ".github/netbird-relay-upstream.sha" "$SYNC_OFFICIAL"
 grep -q "gh workflow run build-ova" "$SYNC_OFFICIAL"
 grep -q "netbird_relay_ref" "$SYNC_OFFICIAL"
+grep -q "gh run watch" "$SYNC_OFFICIAL"
+grep -q -- "--exit-status" "$SYNC_OFFICIAL"
+grep -q "gh release delete" "$SYNC_OFFICIAL"
+grep -q -- "--cleanup-tag" "$SYNC_OFFICIAL"
+grep -q "isLatest" "$SYNC_OFFICIAL"
 if grep -Fq '\\.' "$SYNC_OFFICIAL" || grep -Fq '\\^{}' "$SYNC_OFFICIAL"; then
   echo "Official tag detection must not double-escape regex characters inside shell single quotes." >&2
   exit 1

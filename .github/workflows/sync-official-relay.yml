@@ -63,9 +63,70 @@ jobs:
 
       - name: Trigger OVA release build
         if: steps.upstream.outputs.changed == 'true'
+        id: build
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          head_sha="$(git rev-parse HEAD)"
           gh workflow run build-ova \
             --ref main \
             -f netbird_relay_ref="${{ steps.upstream.outputs.latest_tag }}"
+
+          build_run_id=""
+          for attempt in $(seq 1 30); do
+            build_run_id="$(gh run list \
+              --workflow build-ova.yml \
+              --event workflow_dispatch \
+              --limit 20 \
+              --json databaseId,headSha,createdAt \
+              --jq "map(select(.headSha == \"${head_sha}\")) | sort_by(.createdAt) | last | .databaseId")"
+            if [ -n "${build_run_id}" ] && [ "${build_run_id}" != "null" ]; then
+              break
+            fi
+            sleep 5
+          done
+
+          if [ -z "${build_run_id}" ] || [ "${build_run_id}" = "null" ]; then
+            echo "::error::Unable to find the triggered OVA build run"
+            exit 1
+          fi
+
+          echo "Watching OVA build run ${build_run_id}"
+          gh run watch "${build_run_id}" --exit-status
+
+      - name: Remove older stable releases
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest_release="$(gh release list \
+            --limit 100 \
+            --json tagName,isLatest \
+            --jq 'map(select(.isLatest)) | .[0].tagName')"
+          if ! printf '%s' "${latest_release}" | grep -Eq '^v1\.0\.[0-9]+$'; then
+            echo "::error::Unable to identify the latest stable release"
+            exit 1
+          fi
+
+          echo "Keeping stable release ${latest_release}"
+          gh release list \
+            --limit 100 \
+            --json tagName \
+            --jq '.[].tagName' \
+            | grep -E '^v1\.0\.[0-9]+$' \
+            | grep -Fvx "${latest_release}" \
+            | while IFS= read -r old_release; do
+                echo "Deleting old release ${old_release}"
+                gh release delete "${old_release}" --yes --cleanup-tag
+              done
+
+          git ls-remote --tags origin 'refs/tags/v1.0.*' \
+            | awk '{sub("refs/tags/", "", $2); print $2}' \
+            | sed 's/\^{}$//' \
+            | sort -u \
+            | grep -E '^v1\.0\.[0-9]+$' \
+            | grep -Fvx "${latest_release}" \
+            | while IFS= read -r old_tag; do
+                echo "Deleting old tag ${old_tag}"
+                git push origin ":refs/tags/${old_tag}"
+              done
