@@ -414,6 +414,21 @@ jobs:
           - Update: ${{ steps.meta.outputs.update_note }}
           EOF
 
+      - name: Upload unpublished OVA test artifacts
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'false' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: net-relay-ova-test-${{ github.run_id }}
+          retention-days: 7
+          path: |
+            release/net-relay-alpine-x86_64.ova
+            release/net-relay-alpine-x86_64-minimal.ova
+            release/net-relay-alpine-x86_64.raw.img.gz
+            release/net-relay-alpine-x86_64.vhd.gz
+            release/net-relay-alpine-x86_64.qcow2.gz
+            release/SHA256SUMS
+            release/RELEASE_NOTES.md
+
       - name: Publish release
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.publish_release != 'false' }}
         env:
