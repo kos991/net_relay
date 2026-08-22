@@ -20,11 +20,11 @@ OS_VERSION_CODENAME=""
 OS_FAMILY=""
 
 log() {
-  echo -e "${GREEN}$*${NC}"
+  echo -e "${GREEN}$*${NC}" >&2
 }
 
 warn() {
-  echo -e "${YELLOW}$*${NC}"
+  echo -e "${YELLOW}$*${NC}" >&2
 }
 
 fail() {
