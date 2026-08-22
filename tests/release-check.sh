@@ -393,6 +393,8 @@ grep -q 'proxyAsset("SHA256SUMS")' "$WORKER"
 grep -q 'branches:' "$DEPLOY_WORKER"
 grep -q 'worker/rels-worker.js' "$DEPLOY_WORKER"
 grep -q 'cloudflare/wrangler-action@v3' "$DEPLOY_WORKER"
+grep -q "github.event.inputs.worker_name || 'rels-worker'" "$DEPLOY_WORKER"
+grep -q "github.event.inputs.route || 'rels.jinfei.org/\*'" "$DEPLOY_WORKER"
 grep -q "awk -v n=" "$INSTALL"
 
 if grep -q "Relay auth secret: \${RELAY_AUTH_SECRET}" "$SETUP"; then

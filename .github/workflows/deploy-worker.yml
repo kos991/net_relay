@@ -33,4 +33,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy worker/rels-worker.js --name "${{ github.event.inputs.worker_name }}" --route "${{ github.event.inputs.route }}" --compatibility-date 2026-06-08
+          command: deploy worker/rels-worker.js --name "${{ github.event.inputs.worker_name || 'rels-worker' }}" --route "${{ github.event.inputs.route || 'rels.jinfei.org/*' }}" --compatibility-date 2026-06-08
