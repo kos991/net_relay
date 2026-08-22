@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEFAULT_RELEASE_BASE="https://github.com/kos991/net_relay/releases/latest/download"
+DEFAULT_RELEASE_BASE="https://rels.jinfei.org/download"
 RELEASE_BASE="${RELEASE_BASE:-$DEFAULT_RELEASE_BASE}"
 ALLOW_CUSTOM_RELEASE_BASE="${ALLOW_CUSTOM_RELEASE_BASE:-0}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/netbird-relay-installer}"
@@ -135,7 +135,7 @@ validate_args() {
 
 validate_release_base() {
   case "$RELEASE_BASE" in
-    https://github.com/kos991/net_relay/releases/latest/download|https://github.com/kos991/net_relay/releases/download/*)
+    https://rels.jinfei.org/download|https://github.com/kos991/net_relay/releases/latest/download|https://github.com/kos991/net_relay/releases/download/*)
       return 0
       ;;
     https://*)

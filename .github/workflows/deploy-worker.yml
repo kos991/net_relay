@@ -1,6 +1,12 @@
 name: deploy-worker
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - worker/rels-worker.js
+      - .github/workflows/deploy-worker.yml
   workflow_dispatch:
     inputs:
       worker_name:

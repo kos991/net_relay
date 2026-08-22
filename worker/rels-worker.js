@@ -1,4 +1,12 @@
 const RELEASE_BASE = "https://github.com/kos991/net_relay/releases/latest/download";
+const RELEASE_ASSETS = new Set([
+  "install.sh",
+  "SHA256SUMS",
+  "netbird-relay-linux-amd64.tar.gz",
+  "netbird-relay-linux-arm64.tar.gz",
+  "setup-relay.sh",
+  "reload-relay-certificate.sh",
+]);
 
 async function proxyAsset(name, contentDisposition = true) {
   const upstream = await fetch(`${RELEASE_BASE}/${name}`, {
@@ -35,6 +43,16 @@ export default {
 
     if (url.pathname === "/" || url.pathname === "/main.sh") {
       return proxyAsset("main.sh", false);
+    }
+    if (url.pathname.startsWith("/download/")) {
+      const assetName = url.pathname.slice("/download/".length);
+      if (!RELEASE_ASSETS.has(assetName)) {
+        return new Response("Not found\n", {
+          status: 404,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        });
+      }
+      return proxyAsset(assetName, assetName.endsWith(".sh") ? false : true);
     }
     if (url.pathname === "/install.sh") {
       return proxyAsset("install.sh");

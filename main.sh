@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-DEFAULT_INSTALL_URL="https://rels.jinfei.org/install.sh"
+DEFAULT_INSTALL_URL="https://rels.jinfei.org/download/install.sh"
 INSTALL_URL="${INSTALL_URL:-$DEFAULT_INSTALL_URL}"
 ALLOW_CUSTOM_INSTALL_URL="${ALLOW_CUSTOM_INSTALL_URL:-0}"
 RELS_LANG="${RELS_LANG:-}"
@@ -131,7 +131,7 @@ download_file() {
 
 validate_install_url() {
   case "$INSTALL_URL" in
-    https://rels.jinfei.org/install.sh|https://github.com/kos991/net_relay/releases/latest/download/install.sh|https://github.com/kos991/net_relay/releases/download/*/install.sh)
+    https://rels.jinfei.org/download/install.sh|https://rels.jinfei.org/install.sh|https://github.com/kos991/net_relay/releases/latest/download/install.sh|https://github.com/kos991/net_relay/releases/download/*/install.sh)
       return 0
       ;;
     https://*)
