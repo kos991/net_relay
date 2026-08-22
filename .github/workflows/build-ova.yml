@@ -237,7 +237,9 @@ jobs:
             echo "::error::OVA SSH port mismatch: expected ${EXPECTED_SSH_PORT}, image contains ${actual_ssh_port}"
             exit 1
           fi
-          firstboot_ssh_port="$(sudo virt-cat -a ova-build/alpine.qcow2 /usr/local/sbin/net-relay-firstboot | awk -F': ' '/^- SSH port:/ {print $2; exit}')"
+          firstboot_ssh_port="$(sudo virt-cat -a ova-build/alpine.qcow2 /usr/local/sbin/net-relay-firstboot \
+            | sed -nE 's/^- SSH (port|端口)[:：][[:space:]]*//p' \
+            | head -n 1)"
           if [[ "$firstboot_ssh_port" != "$actual_ssh_port" ]]; then
             echo "::error::OVA first-boot SSH port mismatch: sshd=${actual_ssh_port}, firstboot=${firstboot_ssh_port}"
             exit 1
