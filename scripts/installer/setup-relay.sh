@@ -195,9 +195,21 @@ service_reload_command() {
 
 ensure_acme_sh() {
   local installer
+  if command -v acme.sh >/dev/null 2>&1; then
+    command -v acme.sh
+    return 0
+  fi
+
   if run_as_root test -x "${ACME_HOME}/acme.sh"; then
     printf '%s' "${ACME_HOME}/acme.sh"
     return 0
+  fi
+
+  if command -v apk >/dev/null 2>&1; then
+    if run_as_root apk add --no-cache acme.sh >/dev/null 2>&1; then
+      command -v acme.sh
+      return 0
+    fi
   fi
 
   log "Installing acme.sh..."

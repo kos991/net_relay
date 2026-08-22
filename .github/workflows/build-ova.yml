@@ -36,7 +36,7 @@ jobs:
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || '' }}
-      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata gnutls
+      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata gnutls acme.sh
       TRIVY_VERSION: "0.71.0"
       TRIVY_CHECKSUM: "30a3d22b23f88c233f1658f562fb477cae3b3e8b4761109d515b7698daf85814"
     steps:
@@ -214,6 +214,26 @@ jobs:
             exit "$status"
           fi
 
+      - name: Verify OVA SSH port
+        env:
+          EXPECTED_SSH_PORT: ${{ steps.meta.outputs.ssh_port }}
+        run: |
+          actual_ssh_port="$(sudo virt-cat -a ova-build/alpine.qcow2 /etc/ssh/sshd_config | awk '$1 == "Port" {print $2; exit}')"
+          if [[ ! "$actual_ssh_port" =~ ^[0-9]+$ ]]; then
+            echo "::error::OVA sshd_config does not contain a numeric SSH port"
+            exit 1
+          fi
+          if [[ "$actual_ssh_port" != "$EXPECTED_SSH_PORT" ]]; then
+            echo "::error::OVA SSH port mismatch: expected ${EXPECTED_SSH_PORT}, image contains ${actual_ssh_port}"
+            exit 1
+          fi
+          firstboot_ssh_port="$(sudo virt-cat -a ova-build/alpine.qcow2 /usr/local/sbin/net-relay-firstboot | awk -F': ' '/^- SSH port:/ {print $2; exit}')"
+          if [[ "$firstboot_ssh_port" != "$actual_ssh_port" ]]; then
+            echo "::error::OVA first-boot SSH port mismatch: sshd=${actual_ssh_port}, firstboot=${firstboot_ssh_port}"
+            exit 1
+          fi
+          echo "SSH_PORT=${actual_ssh_port}" >> "$GITHUB_ENV"
+
       - name: Package release images
         run: |
           qemu-img convert -p -O vmdk -o subformat=streamOptimized,adapter_type=lsilogic ova-build/alpine.qcow2 release/net-relay-alpine-x86_64.vmdk
@@ -361,8 +381,8 @@ jobs:
 
           - User: root
           - Initial password: ${{ steps.meta.outputs.root_password }}
-          - SSH port: ${{ steps.meta.outputs.ssh_port }}
-          - Login command: \`ssh -p ${{ steps.meta.outputs.ssh_port }} root@<OVA_IP>\`
+          - SSH port: ${SSH_PORT}
+          - Login command: \`ssh -p ${SSH_PORT} root@<OVA_IP>\`
           - First login will force a root password change before initialization continues.
 
           ## OVA initialization
