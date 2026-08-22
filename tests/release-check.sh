@@ -73,19 +73,18 @@ zh_prompt="$(RELS_LANG=zh bash -c 'source "$1"; msg relay_domain' _ "$SETUP")"
 grep -Fq "Relay domain" <<<"$en_prompt"
 grep -Fq "Relay 域名" <<<"$zh_prompt"
 
-grep -q "NetBird Relay OVA First Boot Wizard" "$FIRSTBOOT"
-grep -q "First boot steps" "$FIRSTBOOT"
-grep -q "\\[1/5\\] Environment preflight" "$FIRSTBOOT"
-grep -q "\\[2/5\\] Root partition resize" "$FIRSTBOOT"
-grep -q "\\[3/5\\] Network self-check" "$FIRSTBOOT"
-grep -q "\\[4/5\\] ZRAM and kernel tuning" "$FIRSTBOOT"
-grep -q "\\[5/5\\] Relay setup wizard" "$FIRSTBOOT"
-grep -q "Run rels to open the management menu again" "$FIRSTBOOT"
-grep -q "Running OVA boot preflight checks" "$FIRSTBOOT"
-grep -q "Preflight checks completed" "$FIRSTBOOT"
-grep -q "Multi-node Relay groups" "$FIRSTBOOT"
-grep -q "Run rels to open the management menu again" "$FIRSTBOOT"
-grep -q "netbird-relay binary is missing" "$FIRSTBOOT"
+grep -q "NetBird Relay OVA 首次启动向导" "$FIRSTBOOT"
+grep -q "首次启动步骤" "$FIRSTBOOT"
+grep -q "\\[1/5\\] 环境预检" "$FIRSTBOOT"
+grep -q "\\[2/5\\] 根分区扩容" "$FIRSTBOOT"
+grep -q "\\[3/5\\] 网络自检" "$FIRSTBOOT"
+grep -q "\\[4/5\\] ZRAM 和内核调优" "$FIRSTBOOT"
+grep -q "\\[5/5\\] Relay 配置向导" "$FIRSTBOOT"
+grep -q "再次运行 rels" "$FIRSTBOOT"
+grep -q "正在执行 OVA 启动预检" "$FIRSTBOOT"
+grep -q "预检完成" "$FIRSTBOOT"
+grep -q "多节点 Relay 组" "$FIRSTBOOT"
+grep -q "未找到 netbird-relay 二进制文件" "$FIRSTBOOT"
 grep -q "setup-root-resize" "$FIRSTBOOT"
 grep -q "setup-network-check" "$FIRSTBOOT"
 grep -q "setup-zram" "$FIRSTBOOT"
@@ -144,7 +143,7 @@ grep -q 'scripts/installer/setup-relay.sh' "$ROOT_SETUP"
 grep -q "root-password-confirmed" "$ROOT_PROFILE"
 grep -q "ROOT_PASSWORD_CONFIRM_FLAG" "$ROOT_PROFILE"
 grep -q "passwd root" "$ROOT_PROFILE"
-grep -q "First login requires changing the root password" "$ROOT_PROFILE"
+grep -q "首次登录必须修改 root 密码" "$ROOT_PROFILE"
 grep -q "expire: true" "$LOGIN_CFG"
 grep -Fq "datasource_list: [ AliYun, NoCloud, ConfigDrive, None ]" "$CLOUD_DATASOURCES"
 grep -q "LANG=C.UTF-8" "$LOCALE_PROFILE"
@@ -444,8 +443,8 @@ if grep -q "Relay auth secret: \${RELAY_AUTH_SECRET}" "$SETUP"; then
 fi
 
 if LC_ALL=C.UTF-8 grep -R -n "[一-龥]" \
-  "$FIRSTBOOT" "$RELS" "$ROOT_PROFILE" "$ZRAM_SETUP" "$KERNEL_TUNING" "$LOCALE_PROFILE"; then
-  echo "OVA console scripts must remain ASCII/English only." >&2
+  "$RELS" "$ZRAM_SETUP" "$KERNEL_TUNING" "$LOCALE_PROFILE"; then
+  echo "OVA utility scripts must remain ASCII/English only." >&2
   exit 1
 fi
 
