@@ -49,6 +49,29 @@ bash -n "$NETWORK_CHECK"
 sh -n "$MAIN"
 bash -n "$ROOT_PROFILE"
 sh -n "$LOCALE_PROFILE"
+node "$ROOT_DIR/tests/worker-check.mjs"
+
+zh_header="$(RELS_LANG=zh bash -c 'source "$1"; print_header' _ "$SETUP" 2>&1)"
+grep -Fq "NetBird Relay 配置向导" <<<"$zh_header"
+grep -Fq "同一 Relay 节点组中的所有节点必须使用相同的密钥。" <<<"$zh_header"
+zh_summary="$(RELS_LANG=zh bash -c '
+  source "$1"
+  RELAY_GROUP_MODE=create
+  RELAY_DOMAIN=rels.example.com
+  RELAY_PORT=9527
+  STUN_PORT=3478
+  RELAY_AUTH_SECRET=abcdefghijklmnop
+  CERT_MODE=cloudflare
+  TLS_CERT_FILE=/etc/netbird-relay/certs/fullchain.pem
+  TLS_KEY_FILE=/etc/netbird-relay/certs/privkey.pem
+  print_summary
+' _ "$SETUP" 2>&1)"
+grep -Fq "配置完成" <<<"$zh_summary"
+grep -Fq "Relay 节点组模式：创建新的 Relay 节点组" <<<"$zh_summary"
+en_prompt="$(RELS_LANG=en bash -c 'source "$1"; msg relay_domain' _ "$SETUP")"
+zh_prompt="$(RELS_LANG=zh bash -c 'source "$1"; msg relay_domain' _ "$SETUP")"
+grep -Fq "Relay domain" <<<"$en_prompt"
+grep -Fq "Relay 域名" <<<"$zh_prompt"
 
 grep -q "NetBird Relay OVA First Boot Wizard" "$FIRSTBOOT"
 grep -q "First boot steps" "$FIRSTBOOT"
@@ -80,6 +103,12 @@ grep -q "acme.sh" "$SETUP"
 grep -q "command -v acme.sh" "$SETUP"
 grep -q "apk add --no-cache acme.sh" "$SETUP"
 grep -q "NetBird Relay Setup Wizard" "$SETUP"
+grep -Fq 'RELS_LANG="${RELS_LANG:-en}"' "$SETUP"
+grep -q "is_zh()" "$SETUP"
+grep -q "NetBird Relay 配置向导" "$SETUP"
+grep -q "Relay 节点组模式" "$SETUP"
+grep -q "请选择证书模式" "$SETUP"
+grep -q "配置完成" "$SETUP"
 grep -q "Relay node group mode" "$SETUP"
 grep -q "Select certificate mode" "$SETUP"
 grep -q "Setup completed" "$SETUP"
@@ -394,8 +423,11 @@ grep -q 'DEFAULT_RELEASE_BASE="https://rels.jinfei.org/download"' "$INSTALL"
 grep -q 'https://rels.jinfei.org/download' "$INSTALL"
 grep -q 'const RELEASE_ASSETS = new Set' "$WORKER"
 grep -q 'const SOURCE_INSTALL_URL' "$WORKER"
+grep -q 'const SOURCE_SETUP_URL' "$WORKER"
 grep -q 'url.pathname.startsWith("/download/")' "$WORKER"
 grep -q 'proxyInstallScript()' "$WORKER"
+grep -q 'proxySetupScript()' "$WORKER"
+grep -Fq 'assetName === "setup-relay.sh"' "$WORKER"
 grep -q 'crypto.subtle.digest' "$WORKER"
 grep -q 'return proxyAsset(assetName' "$WORKER"
 grep -q 'return proxyChecksums()' "$WORKER"
@@ -412,7 +444,7 @@ if grep -q "Relay auth secret: \${RELAY_AUTH_SECRET}" "$SETUP"; then
 fi
 
 if LC_ALL=C.UTF-8 grep -R -n "[一-龥]" \
-  "$FIRSTBOOT" "$RELS" "$ROOT_PROFILE" "$ZRAM_SETUP" "$KERNEL_TUNING" "$SETUP" "$LOCALE_PROFILE"; then
+  "$FIRSTBOOT" "$RELS" "$ROOT_PROFILE" "$ZRAM_SETUP" "$KERNEL_TUNING" "$LOCALE_PROFILE"; then
   echo "OVA console scripts must remain ASCII/English only." >&2
   exit 1
 fi

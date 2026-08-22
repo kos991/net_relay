@@ -1,5 +1,6 @@
 const RELEASE_BASE = "https://github.com/kos991/net_relay/releases/latest/download";
 const SOURCE_INSTALL_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/scripts/installer/install.sh";
+const SOURCE_SETUP_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/scripts/installer/setup-relay.sh";
 const RELEASE_ASSETS = new Set([
   "install.sh",
   "SHA256SUMS",
@@ -38,13 +39,13 @@ async function proxyAsset(name, contentDisposition = true) {
   });
 }
 
-async function proxyInstallScript() {
-  const upstream = await fetch(SOURCE_INSTALL_URL, {
+async function proxySourceScript(sourceUrl, name) {
+  const upstream = await fetch(sourceUrl, {
     headers: { "user-agent": "net-relay-worker" },
   });
 
   if (!upstream.ok) {
-    return new Response("Failed to fetch install.sh\n", {
+    return new Response(`Failed to fetch ${name}\n`, {
       status: 502,
       headers: { "content-type": "text/plain; charset=utf-8" },
     });
@@ -59,47 +60,70 @@ async function proxyInstallScript() {
   });
 }
 
+async function proxyInstallScript() {
+  return proxySourceScript(SOURCE_INSTALL_URL, "install.sh");
+}
+
+async function proxySetupScript() {
+  return proxySourceScript(SOURCE_SETUP_URL, "setup-relay.sh");
+}
+
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(text),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
 async function proxyChecksums() {
-  const [sumsResponse, installResponse] = await Promise.all([
+  const [sumsResponse, installResponse, setupResponse] = await Promise.all([
     fetch(`${RELEASE_BASE}/SHA256SUMS`, {
       headers: { "user-agent": "net-relay-worker" },
     }),
     fetch(SOURCE_INSTALL_URL, {
       headers: { "user-agent": "net-relay-worker" },
     }),
+    fetch(SOURCE_SETUP_URL, {
+      headers: { "user-agent": "net-relay-worker" },
+    }),
   ]);
 
-  if (!sumsResponse.ok || !installResponse.ok) {
+  if (!sumsResponse.ok || !installResponse.ok || !setupResponse.ok) {
     return new Response("Failed to fetch checksums\n", {
       status: 502,
       headers: { "content-type": "text/plain; charset=utf-8" },
     });
   }
 
-  const [sumsText, installText] = await Promise.all([
+  const [sumsText, installText, setupText] = await Promise.all([
     sumsResponse.text(),
     installResponse.text(),
+    setupResponse.text(),
   ]);
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(installText),
-  );
-  const installHash = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-  let found = false;
+  const hashes = new Map([
+    ["install.sh", await sha256Hex(installText)],
+    ["setup-relay.sh", await sha256Hex(setupText)],
+  ]);
+  const found = new Set();
   let output = sumsText
     .split(/\r?\n/)
     .map((line) => {
-      if (/\sinstall\.sh$/.test(line)) {
-        found = true;
-        return `${installHash}  install.sh`;
+      for (const [name, hash] of hashes) {
+        if (new RegExp(`\\s${name.replace('.', '\\.')}$`).test(line)) {
+          found.add(name);
+          return `${hash}  ${name}`;
+        }
       }
       return line;
     })
     .join("\n");
-  if (!found) {
-    output += `${output.endsWith("\n") ? "" : "\n"}${installHash}  install.sh\n`;
+  for (const [name, hash] of hashes) {
+    if (!found.has(name)) {
+      output += `${output.endsWith("\n") ? "" : "\n"}${hash}  ${name}\n`;
+    }
   }
 
   return new Response(output, {
@@ -134,6 +158,9 @@ export default {
       }
       if (assetName === "install.sh") {
         return proxyInstallScript();
+      }
+      if (assetName === "setup-relay.sh") {
+        return proxySetupScript();
       }
       if (assetName === "SHA256SUMS") {
         return proxyChecksums();
