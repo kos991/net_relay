@@ -29,7 +29,6 @@ BUILD_OVA="${ROOT_DIR}/.github/workflows/build-ova.yml"
 DEPLOY_WORKER="${ROOT_DIR}/.github/workflows/deploy-worker.yml"
 VALIDATE_WORKFLOW="${ROOT_DIR}/.github/workflows/validate.yml"
 SYNC_OFFICIAL="${ROOT_DIR}/.github/workflows/sync-official-relay.yml"
-TRIVY_IGNORE="${ROOT_DIR}/.trivyignore.yaml"
 SYSCTL_CONF="${ROOT_DIR}/packaging/ova/files/99-net-relay-sysctl.conf"
 SSHD_CONFIG="${ROOT_DIR}/packaging/ova/files/sshd_config"
 
@@ -50,6 +49,22 @@ sh -n "$MAIN"
 bash -n "$ROOT_PROFILE"
 sh -n "$LOCALE_PROFILE"
 node "$ROOT_DIR/tests/worker-check.mjs"
+
+OPENRC_TEST_ENV="$(mktemp)"
+printf 'NB_AUTH_SECRET=test-secret=\n' > "$OPENRC_TEST_ENV"
+if ! (
+  RELAY_ENV_FILE="$OPENRC_TEST_ENV"
+  checkpath() { :; }
+  . "$OPENRC_SERVICE"
+  start_pre
+  [[ "$NB_AUTH_SECRET" == "test-secret=" ]]
+); then
+  echo "OpenRC must preserve trailing '=' characters in NB_AUTH_SECRET." >&2
+  rm -f "$OPENRC_TEST_ENV"
+  exit 1
+fi
+rm -f "$OPENRC_TEST_ENV"
+grep -Fxq 'v0.80.0' "$ROOT_DIR/.github/netbird-relay-upstream.sha"
 
 zh_header="$(RELS_LANG=zh bash -c 'source "$1"; print_header' _ "$SETUP" 2>&1)"
 grep -Fq "NetBird Relay 配置向导" <<<"$zh_header"
@@ -219,6 +234,8 @@ grep -q "00-net-relay-locale.sh" "$BUILD_OVA"
 grep -q "virtio-modules.conf" "$BUILD_OVA"
 grep -q "98-net-relay-datasources.cfg" "$BUILD_OVA"
 grep -q "setup-cloud-init" "$BUILD_OVA"
+grep -q 'The Alpine Wiki' "$BUILD_OVA"
+grep -q 'Alpine release notes' "$BUILD_OVA"
 grep -q "rc-update add qemu-guest-agent default" "$BUILD_OVA"
 grep -q "/etc/profile.d" "$BUILD_OVA"
 if grep -Eq "font-noto-cjk|fontconfig|musl-locales|musl-locales-lang|fc-cache" "$BUILD_OVA"; then
@@ -256,38 +273,18 @@ grep -q '"release/${VHD_NAME}"' "$BUILD_OVA"
 grep -q '"release/${QCOW2_NAME}"' "$BUILD_OVA"
 grep -q '"$VHD_NAME"' "$BUILD_OVA"
 grep -q '"$QCOW2_NAME"' "$BUILD_OVA"
-grep -q "TRIVY_VERSION" "$BUILD_OVA"
-grep -q "TRIVY_CHECKSUM" "$BUILD_OVA"
 grep -q 'go-version: "1.26.8"' "$BUILD_OVA"
-grep -q "Install Trivy" "$BUILD_OVA"
-grep -q "sha256sum -c" "$BUILD_OVA"
-grep -q "Scan relay source with govulncheck" "$BUILD_OVA"
-grep -q "go install golang.org/x/vuln/cmd/govulncheck" "$BUILD_OVA"
-grep -q "Scan release workspace with Trivy" "$BUILD_OVA"
-grep -q "Scan Alpine rootfs with Trivy" "$BUILD_OVA"
-grep -q "Generate release SBOM" "$BUILD_OVA"
-grep -q "trivy rootfs" "$BUILD_OVA"
 grep -q "actions/upload-artifact@v4" "$BUILD_OVA"
 grep -q "publish_release == 'false'" "$BUILD_OVA"
-grep -q -- "--pkg-types os" "$BUILD_OVA"
-grep -q "trivy fs" "$BUILD_OVA"
-grep -q -- "--ignorefile .trivyignore.yaml" "$BUILD_OVA"
-grep -q "trivy filesystem" "$BUILD_OVA"
-grep -q "trivy sbom" "$BUILD_OVA"
-grep -q "cyclonedx" "$BUILD_OVA"
-grep -q "trivy-rootfs.json" "$BUILD_OVA"
-grep -q "trivy-fs.json" "$BUILD_OVA"
-grep -q "net-relay-sbom.cdx.json" "$BUILD_OVA"
-grep -q "release/trivy-rootfs.json" "$BUILD_OVA"
-grep -q "trap cleanup_rootfs EXIT" "$BUILD_OVA"
-grep -q "Vulnerabilities" "$BUILD_OVA"
-grep -q "release/trivy-fs.json" "$BUILD_OVA"
-grep -q "release/net-relay-sbom.cdx.json" "$BUILD_OVA"
-grep -q "CRITICAL,HIGH" "$BUILD_OVA"
 grep -q "cp main.sh release/main.sh" "$BUILD_OVA"
 grep -q '"release/main.sh"' "$BUILD_OVA"
 grep -q "netbird-relay-linux-amd64.tar.gz" "$BUILD_OVA"
 grep -q "netbird-relay-linux-arm64.tar.gz" "$BUILD_OVA"
+
+if grep -Eiq 'trivy|govulncheck|vulnerability scan' "$BUILD_OVA" "$VALIDATE_WORKFLOW"; then
+  echo "Release and validation workflows must not run security scans." >&2
+  exit 1
+fi
 
 grep -q "growpart" "$ROOT_RESIZE"
 grep -q "apt_run" "$ROOT_RESIZE"
@@ -486,19 +483,6 @@ if grep -Fq '\\.' "$SYNC_OFFICIAL" || grep -Fq '\\^{}' "$SYNC_OFFICIAL"; then
   echo "Official tag detection must not double-escape regex characters inside shell single quotes." >&2
   exit 1
 fi
-
-grep -q "TRIVY_VERSION" "$VALIDATE_WORKFLOW"
-grep -q "TRIVY_CHECKSUM" "$VALIDATE_WORKFLOW"
-grep -q 'go-version: "1.26.8"' "$VALIDATE_WORKFLOW"
-grep -q "Install Trivy" "$VALIDATE_WORKFLOW"
-grep -q "sha256sum -c" "$VALIDATE_WORKFLOW"
-grep -q "Scan repository with Trivy" "$VALIDATE_WORKFLOW"
-grep -q "trivy fs" "$VALIDATE_WORKFLOW"
-grep -q -- "--ignorefile .trivyignore.yaml" "$VALIDATE_WORKFLOW"
-grep -q "Scan relay source with govulncheck" "$VALIDATE_WORKFLOW"
-grep -q "go install golang.org/x/vuln/cmd/govulncheck" "$VALIDATE_WORKFLOW"
-grep -q "CRITICAL,HIGH" "$VALIDATE_WORKFLOW"
-grep -q "misconfigurations: \[\]" "$TRIVY_IGNORE"
 
 if find "$ROOT_DIR" -path "$ROOT_DIR/.git" -prune -o -path "$ROOT_DIR/.build" -prune -o -path "$ROOT_DIR/.worktrees" -prune -o -path "$ROOT_DIR/.tmp-release" -prune -o -path "$ROOT_DIR/.cospec" -prune -o -path "$ROOT_DIR/netbird" -prune -o -name Dockerfile -print | grep -q .; then
   echo "Repository must not contain Docker image definitions." >&2

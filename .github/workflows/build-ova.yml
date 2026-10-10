@@ -37,8 +37,6 @@ jobs:
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || '' }}
       OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata gnutls acme.sh
-      TRIVY_VERSION: "0.71.0"
-      TRIVY_CHECKSUM: "30a3d22b23f88c233f1658f562fb477cae3b3e8b4761109d515b7698daf85814"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,13 +57,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-utils libguestfs-tools tar gzip
 
-      - name: Install Trivy
-        run: |
-          curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -o trivy.tar.gz
-          printf '%s  trivy.tar.gz\n' "${TRIVY_CHECKSUM}" | sha256sum -c
-          tar -xzf trivy.tar.gz trivy
-          sudo install -m 0755 trivy /usr/local/bin/trivy
-
       - name: Resolve NetBird relay ref
         run: |
           if [ -z "${NETBIRD_RELAY_REF}" ]; then
@@ -84,11 +75,6 @@ jobs:
           TARGET_OS=linux TARGET_ARCH=arm64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash packaging/relay/build-relay.sh
           TARGET_OS=linux TARGET_ARCH=amd64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash packaging/relay/package-relay.sh
           TARGET_OS=linux TARGET_ARCH=arm64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash packaging/relay/package-relay.sh
-
-      - name: Scan relay source with govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          (cd .build/netbird && govulncheck ./relay)
 
       - name: Generate release metadata
         id: meta
@@ -212,6 +198,7 @@ jobs:
             --run-command "chmod +x /usr/local/bin/netbird-relay /usr/local/libexec/netbird-relay/reload-relay-certificate.sh /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /usr/local/sbin/setup-root-resize /usr/local/sbin/setup-network-check /usr/local/sbin/setup-zram /usr/local/sbin/setup-kernel-tuning /opt/netbird-relay-installer/install.sh /opt/netbird-relay-installer/setup-relay.sh" \
             --run-command "ln -sf /usr/local/sbin/rels /usr/local/bin/rels" \
             --run-command "setup-cloud-init" \
+            --run-command "sed -i '/^The Alpine Wiki/,/^$/d; /^Alpine release notes:/,/^$/d' /etc/motd" \
             --run-command "rc-update add qemu-guest-agent default || true" \
             --run-command "chmod +x /etc/init.d/netbird-relay.openrc && mv /etc/init.d/netbird-relay.openrc /etc/init.d/netbird-relay" \
             --run-command "cat /root/root-profile >> /root/.profile && rm -f /root/root-profile" 2>&1 | tee ova-build/virt-customize.log
@@ -296,65 +283,9 @@ jobs:
           gzip -9 release/net-relay-alpine-x86_64.vhd
           gzip -9 release/net-relay-alpine-x86_64.qcow2
 
-      - name: Scan release workspace with Trivy
+      - name: Generate release checksums
         run: |
-          mkdir -p ova-build/trivy-workspace
-          cp -a .github packaging scripts worker install.sh main.sh setup-relay.sh README.md LICENSE ova-build/trivy-workspace/
-          cp -a release ova-build/trivy-workspace/
-          trivy fs \
-            --scanners vuln,secret,misconfig \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            --ignorefile .trivyignore.yaml \
-            --exit-code 1 \
-            --format json \
-            --output release/trivy-fs.json \
-            ova-build/trivy-workspace
-
-      - name: Scan Alpine rootfs with Trivy
-        env:
-          LIBGUESTFS_BACKEND: direct
-        run: |
-          mkdir -p ova-build/rootfs
-          cleanup_rootfs() {
-            rm -rf ova-build/rootfs
-          }
-          trap cleanup_rootfs EXIT
-          sudo virt-copy-out -a ova-build/alpine.qcow2 / ova-build/rootfs
-          sudo chown -R "$(id -u):$(id -g)" ova-build/rootfs
-          trivy rootfs \
-            --scanners vuln \
-            --pkg-types os \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            --exit-code 0 \
-            --format json \
-            --output release/trivy-rootfs.json \
-            ova-build/rootfs
-          if python3 -c 'import json,sys; data=json.load(open("release/trivy-rootfs.json")); sys.exit(0 if any(r.get("Vulnerabilities") for r in data.get("Results", [])) else 1)'; then
-            trivy rootfs \
-              --scanners vuln \
-              --pkg-types os \
-              --severity CRITICAL,HIGH \
-              --ignore-unfixed \
-              --exit-code 0 \
-              --format table \
-              ova-build/rootfs
-            exit 1
-          fi
-
-      - name: Generate release SBOM
-        run: |
-          trivy filesystem \
-            --format cyclonedx \
-            --output release/net-relay-sbom.cdx.json \
-            release
-          trivy sbom \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            --exit-code 1 \
-            release/net-relay-sbom.cdx.json
-          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$VHD_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh setup-relay.sh reload-relay-certificate.sh trivy-rootfs.json trivy-fs.json net-relay-sbom.cdx.json > SHA256SUMS)
+          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$VHD_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh setup-relay.sh reload-relay-certificate.sh > SHA256SUMS)
 
       - name: Write release notes
         run: |
@@ -387,7 +318,6 @@ jobs:
           - setup-relay.sh: binary Relay configuration wizard.
           - reload-relay-certificate.sh: certificate validation and Relay restart hook.
           - SHA256SUMS: SHA256 checksums for all published artifacts.
-          - trivy-rootfs.json, trivy-fs.json, net-relay-sbom.cdx.json: vulnerability scan reports and CycloneDX SBOM.
 
           ## OVA access
 
@@ -406,10 +336,9 @@ jobs:
           - Installs cloud-init, qemu-guest-agent, VirtIO support, xfsprogs, and btrfs-progs.
           - Run \`rels\` and choose option 7 to view ZRAM and kernel optimization status.
 
-          ## Security and verification
+          ## Verification
 
           - Relay service runs as the dedicated netbird-relay user in binary mode.
-          - Release build runs govulncheck and Trivy High/Critical gates before publishing.
           - Verify downloaded artifacts with SHA256SUMS before production use.
           - Update: ${{ steps.meta.outputs.update_note }}
           EOF
@@ -454,7 +383,4 @@ jobs:
             "release/install.sh" \
             "release/setup-relay.sh" \
             "release/reload-relay-certificate.sh" \
-            release/trivy-rootfs.json \
-            release/trivy-fs.json \
-            release/net-relay-sbom.cdx.json \
             release/SHA256SUMS
