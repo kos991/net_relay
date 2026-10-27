@@ -64,7 +64,6 @@ if ! (
   exit 1
 fi
 rm -f "$OPENRC_TEST_ENV"
-grep -Fxq 'v0.80.0' "$ROOT_DIR/.github/netbird-relay-upstream.sha"
 
 zh_header="$(RELS_LANG=zh bash -c 'source "$1"; print_header' _ "$SETUP" 2>&1)"
 grep -Fq "NetBird Relay 配置向导" <<<"$zh_header"

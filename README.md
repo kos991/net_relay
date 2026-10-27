@@ -16,6 +16,8 @@ curl -sSL https://rels.jinfei.org | sh
 - 每 6 小时检测 NetBird 官方最新 tag，变化后自动构建 `v1.0.N` 正式版。
 - 发布 Linux amd64/arm64 二进制包、OVA 和 RAW 镜像。
 
+上游版本由 `.github/netbird-relay-upstream.sha` 跟踪，构建时校验 `vX.Y.Z` 正式版本格式；发布检查不固定具体上游版本，自动更新 tag 后无需同步修改检查脚本。
+
 ## 目录
 
 ```text
