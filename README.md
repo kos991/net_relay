@@ -31,6 +31,22 @@ worker/                  下载入口 Worker
 
 根目录的 `main.sh`、`install.sh`、`setup-relay.sh` 保留为兼容入口。
 
+## 构建失败自动修复
+
+`repair-build` 监听主分支的 `build-ova`、`validate` 和 `sync-official-relay`。失败后创建包含运行链接、提交和失败步骤的 Issue，并分配给 Copilot cloud agent 分析和提交修复 PR。相同工作流和提交不会重复建单；PR 仍由维护者审核合并，Agent 不自动发布。
+
+启用前需要：
+
+1. 使用支持 Copilot cloud agent 的订阅，并在账号和仓库设置中启用它。
+2. 创建仅授权本仓库的 fine-grained personal access token：Metadata 读取，Actions、Contents、Issues、Pull requests 读写。令牌所属账号必须能使用 cloud agent。
+3. 在仓库 Settings → Secrets and variables → Actions 中添加 `COPILOT_AGENT_TOKEN`。不要使用工作流的 `GITHUB_TOKEN`，也不要提交或公开令牌。
+
+缺少令牌、权限或 Copilot 服务未启用时，工作流会明确失败；仅添加工作流并不代表自动修复已启用。委派失败后可以重跑任务，它会复用已创建的 Issue。
+
+手动运行 `repair-build` 时填写失败运行的 `run_id`。默认 `dry_run=true` 只验证失败路由并生成任务摘要，不创建 Issue 或启动 Agent；关闭 dry run 才实际委派。可以使用历史失败运行验证配置，Agent 会先检查主分支是否已经修复。
+
+配置依据：[GitHub 官方 Copilot API 文档](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-via-the-api)。此流程通过 Issue 分配启动 Agent，可能消耗 Copilot 配额和 Actions 分钟数。
+
 ## OVA 镜像
 
 - 镜像不内置 Docker、Compose 或 Caddy。
