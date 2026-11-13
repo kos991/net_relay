@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect latest official NetBird release tag
+      - name: Detect latest official NetBird & Alma relay release tags
         id: upstream
         run: |
           latest_tag="$(
@@ -40,25 +40,48 @@ jobs:
             current_tag="$(cat .github/netbird-relay-upstream.sha)"
           fi
 
-          {
-            echo "latest_tag=${latest_tag}"
-            echo "current_tag=${current_tag}"
-          } >> "$GITHUB_OUTPUT"
+          latest_alma_tag="$(
+            git ls-remote https://github.com/yetone/alma-relay.git "refs/tags/v*" \
+              | awk '{print $2}' \
+              | sed 's#refs/tags/##; s#\^{}##' \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+              | sort -V \
+              | tail -1
+          )"
+          if [ -z "$latest_alma_tag" ]; then
+            echo "::error::Unable to detect latest official Alma Relay release tag"
+            exit 1
+          fi
 
-          if [ "$latest_tag" = "$current_tag" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+          current_alma_tag=""
+          if [ -f .github/alma-relay-upstream.sha ]; then
+            current_alma_tag="$(cat .github/alma-relay-upstream.sha)"
+          fi
+
+          changed=false
+          if [ "$latest_tag" != "$current_tag" ]; then
+            changed=true
             printf '%s\n' "$latest_tag" > .github/netbird-relay-upstream.sha
           fi
+
+          if [ "$latest_alma_tag" != "$current_alma_tag" ]; then
+            changed=true
+            printf '%s\n' "$latest_alma_tag" > .github/alma-relay-upstream.sha
+          fi
+
+          {
+            echo "latest_tag=${latest_tag}"
+            echo "latest_alma_tag=${latest_alma_tag}"
+            echo "changed=${changed}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Save upstream tag marker
         if: steps.upstream.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/netbird-relay-upstream.sha
-          git commit -m "Track NetBird relay ${{ steps.upstream.outputs.latest_tag }}"
+          git add .github/netbird-relay-upstream.sha .github/alma-relay-upstream.sha
+          git commit -m "Track NetBird relay ${{ steps.upstream.outputs.latest_tag }} & Alma relay ${{ steps.upstream.outputs.latest_alma_tag }}"
           git push origin HEAD:main
 
       - name: Trigger OVA release build
@@ -70,7 +93,8 @@ jobs:
           head_sha="$(git rev-parse HEAD)"
           gh workflow run build-ova \
             --ref main \
-            -f netbird_relay_ref="${{ steps.upstream.outputs.latest_tag }}"
+            -f netbird_relay_ref="${{ steps.upstream.outputs.latest_tag }}" \
+            -f alma_relay_ref="${{ steps.upstream.outputs.latest_alma_tag }}"
 
           build_run_id=""
           for attempt in $(seq 1 30); do
@@ -108,25 +132,30 @@ jobs:
             exit 1
           fi
 
-          echo "Keeping stable release ${latest_release}"
+          echo "Keeping only the 2 most recent stable releases..."
           gh release list \
             --limit 100 \
             --json tagName \
             --jq '.[].tagName' \
             | grep -E '^v1\.0\.[0-9]+$' \
-            | grep -Fvx "${latest_release}" \
+            | sort -V -r \
+            | sed -e '1,2d' \
             | while IFS= read -r old_release; do
-                echo "Deleting old release ${old_release}"
-                gh release delete "${old_release}" --yes --cleanup-tag
+                if [ -n "$old_release" ]; then
+                  echo "Deleting old release ${old_release}"
+                  gh release delete "${old_release}" --yes --cleanup-tag || true
+                fi
               done
 
           git ls-remote --tags origin 'refs/tags/v1.0.*' \
             | awk '{sub("refs/tags/", "", $2); print $2}' \
             | sed 's/\^{}$//' \
-            | sort -u \
+            | sort -u -V -r \
             | grep -E '^v1\.0\.[0-9]+$' \
-            | grep -Fvx "${latest_release}" \
+            | sed -e '1,2d' \
             | while IFS= read -r old_tag; do
-                echo "Deleting old tag ${old_tag}"
-                git push origin ":refs/tags/${old_tag}"
+                if [ -n "$old_tag" ]; then
+                  echo "Deleting old tag ${old_tag}"
+                  git push origin ":refs/tags/${old_tag}" || true
+                fi
               done

@@ -14,6 +14,10 @@ on:
         description: "NetBird upstream ref/tag/branch to build relay from"
         required: false
         default: "main"
+      alma_relay_ref:
+        description: "Alma Relay upstream ref/tag/branch to build from"
+        required: false
+        default: ""
       publish_release:
         description: "Publish GitHub Release after build"
         required: false
@@ -36,6 +40,7 @@ jobs:
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || '' }}
+      ALMA_RELAY_REF: ${{ github.event.inputs.alma_relay_ref || '' }}
       OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata gnutls acme.sh nodejs logrotate
     steps:
       - name: Checkout
@@ -68,6 +73,21 @@ jobs:
           fi
           echo "NETBIRD_RELAY_REF=${NETBIRD_RELAY_REF}" >> "$GITHUB_ENV"
 
+      - name: Resolve Alma relay ref
+        run: |
+          if [ -z "${ALMA_RELAY_REF}" ]; then
+            if [ -f .github/alma-relay-upstream.sha ]; then
+              ALMA_RELAY_REF="$(cat .github/alma-relay-upstream.sha)"
+            else
+              ALMA_RELAY_REF="v1.4.0"
+            fi
+          fi
+          if ! printf '%s' "${ALMA_RELAY_REF}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Alma relay ref must be an official semantic release tag"
+            exit 1
+          fi
+          echo "ALMA_RELAY_REF=${ALMA_RELAY_REF}" >> "$GITHUB_ENV"
+
       - name: Build official NetBird relay binaries
         run: |
           mkdir -p dist release
@@ -75,6 +95,10 @@ jobs:
           TARGET_OS=linux TARGET_ARCH=arm64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash packaging/relay/build-relay.sh
           TARGET_OS=linux TARGET_ARCH=amd64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash packaging/relay/package-relay.sh
           TARGET_OS=linux TARGET_ARCH=arm64 NETBIRD_RELAY_REF="${NETBIRD_RELAY_REF}" bash packaging/relay/package-relay.sh
+
+      - name: Build Alma relay bundle
+        run: |
+          ALMA_RELAY_REF="${ALMA_RELAY_REF}" bash packaging/alma-relay/build-alma-relay.sh
 
       - name: Generate release metadata
         id: meta
@@ -296,11 +320,32 @@ jobs:
           (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$VHD_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh setup-relay.sh reload-relay-certificate.sh rels > SHA256SUMS)
 
       - name: Write release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          cat > release/RELEASE_NOTES.md <<EOF
-          # NetBird Relay ${{ steps.meta.outputs.release_tag }}
+          tag="${{ steps.meta.outputs.release_tag }}"
 
-          This release provides official NetBird Relay binaries built from the upstream NetBird source, plus ready-to-import OVA, RAW, VHD, and QCOW2 images.
+          netbird_notes=""
+          if [ -n "${NETBIRD_RELAY_REF}" ]; then
+            netbird_notes="$(gh api "repos/netbirdio/netbird/releases/tags/${NETBIRD_RELAY_REF}" --jq .body 2>/dev/null || true)"
+          fi
+
+          alma_notes=""
+          if [ -n "${ALMA_RELAY_REF}" ]; then
+            alma_notes="$(gh api "repos/yetone/alma-relay/releases/tags/${ALMA_RELAY_REF}" --jq .body 2>/dev/null || true)"
+          fi
+
+          git fetch --tags --force origin 2>/dev/null || true
+          prev_tag="$(git tag -l "v1.0.*" --sort=-v:refname | grep -Fvx "${tag}" | head -n 1 || true)"
+          script_commits=""
+          if [ -n "${prev_tag}" ]; then
+            script_commits="$(git log "${prev_tag}..HEAD" --oneline -- scripts/ packaging/ tests/ worker/ .github/ || true)"
+          fi
+
+          cat > release/RELEASE_NOTES.md <<EOF
+          # NetBird & Alma Relay ${tag}
+
+          This release provides official NetBird Relay binaries and Alma Remote Access Relay, plus ready-to-import OVA, RAW, VHD, and QCOW2 images.
 
           ## Quick install
           \`\`\`bash
@@ -311,22 +356,56 @@ jobs:
 
           - Channel: stable (\`v1.0.N\` only).
           - NetBird Relay upstream ref: ${NETBIRD_RELAY_REF}
+          - Alma Relay upstream ref: ${ALMA_RELAY_REF}
+
+          ## Services & Ports
+
+          - NetBird Relay: port \`8443\` TCP/UDP, STUN port \`3478\` UDP.
+          - Alma Remote Access Relay: port \`8787\` TCP/WSS (optional, customizable).
 
           ## OVA access
 
-          - User: root
-          - Initial password: ${{ steps.meta.outputs.root_password }}
-          - SSH port: ${SSH_PORT}
-          - Login command: \`ssh -p ${SSH_PORT} root@<OVA_IP>\`
-          - First login will force a root password change before initialization continues.
+          - Console access: log in as \`root\` via VM console (VNC / Proxmox / KVM) to complete initial setup.
+          - SSH port: ${SSH_PORT} (login command: \`ssh -p ${SSH_PORT} root@<OVA_IP>\`).
+          - First login forces a root password change before initialization continues.
 
           ## Verification
 
-          - Relay service runs as the dedicated netbird-relay user in binary mode.
+          - Services run as dedicated service users (netbird-relay and alma-relay).
           - Verify downloaded artifacts with SHA256SUMS before production use.
-          - Update: ${{ steps.meta.outputs.update_note }}
           EOF
 
+          if [ -n "${script_commits}" ]; then
+            cat >> release/RELEASE_NOTES.md <<EOF
+
+          ## Integration updates
+          ${script_commits}
+          EOF
+          fi
+
+          if [ -n "${netbird_notes}" ]; then
+            cat >> release/RELEASE_NOTES.md <<EOF
+
+          ---
+          <details>
+          <summary><b>NetBird Relay (${NETBIRD_RELAY_REF}) upstream release notes</b></summary>
+
+          ${netbird_notes}
+          </details>
+          EOF
+          fi
+
+          if [ -n "${alma_notes}" ]; then
+            cat >> release/RELEASE_NOTES.md <<EOF
+
+          ---
+          <details>
+          <summary><b>Alma Relay (${ALMA_RELAY_REF}) upstream release notes</b></summary>
+
+          ${alma_notes}
+          </details>
+          EOF
+          fi
       - name: Upload unpublished OVA test artifacts
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'false' }}
         uses: actions/upload-artifact@v4

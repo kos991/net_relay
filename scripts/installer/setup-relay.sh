@@ -87,6 +87,7 @@ msg() {
       alma_key) printf '%s' "Alma Relay 访问密钥（留空则公开可用）：" ;;
       alma_port_conflict) printf '%s' "Alma Relay 端口不能与 Relay 端口或 STUN 端口相同。" ;;
       summary_alma_ready) printf 'Alma 远程访问中继已就绪：https://%s:%s' "$1" "$2" ;;
+      summary_alma_note) printf '%s' "配置说明：在桌面端 Alma 设置 -> 远程访问中填入此地址，手机端即可随时直连。" ;;
       summary_title) printf '%s' "配置完成" ;;
       group_create_label) printf '%s' "创建新的 Relay 节点组" ;;
       group_join_label) printf '%s' "加入已有的 Relay 节点组" ;;
@@ -157,6 +158,13 @@ msg() {
     reserved_port) printf '%s' "Relay port 9000 and 9090 are reserved for local health and metrics endpoints." ;;
     join_secret_required) printf '%s' "Joining an existing Relay node group requires an existing secret." ;;
     secret_generated) printf '%s' "Relay auth secret was generated automatically. Save it; all nodes and Management must use the same value." ;;
+    alma_relay_title) printf '%s' "Alma Remote Access Relay setup" ;;
+    enable_alma_relay) printf '%s' "Enable Alma Remote Access Relay (Alma Relay)?" ;;
+    alma_port) printf '%s' "Alma Relay port" ;;
+    alma_key) printf '%s' "Alma Relay registration key (leave empty for public access):" ;;
+    alma_port_conflict) printf '%s' "Alma Relay port cannot be the same as Relay port or STUN port." ;;
+    summary_alma_ready) printf 'Alma Remote Access Relay is ready: https://%s:%s' "$1" "$2" ;;
+    summary_alma_note) printf '%s' "Instructions: In Alma Desktop -> Settings -> Remote Access, enter this address to connect directly from your phone." ;;
     summary_title) printf '%s' "Setup completed" ;;
     group_create_label) printf '%s' "create a new relay node group" ;;
     group_join_label) printf '%s' "join an existing relay node group" ;;
@@ -491,23 +499,26 @@ restart_service() {
 }
 
 configure_alma_relay() {
-  local alma_port="restart_service() {
-  if command -v systemctl >/dev/null 2>&1; then
-    run_as_root systemctl daemon-reload
-    run_as_root systemctl enable --now netbird-relay
-    run_as_root systemctl restart netbird-relay
-  elif command -v rc-update >/dev/null 2>&1; then
-    run_as_root rc-update add netbird-relay default
-    run_as_root service netbird-relay restart
-  else
-    fail "$(msg service_required)"
-  fi
-}"
+  local alma_port="$1"
   local alma_secret="$2"
   local cert_file="$3"
   local key_file="$4"
   local config_dir="/etc/alma-relay"
   local env_file="/etc/alma-relay/relay.env"
+
+  if [[ ! -f /usr/local/lib/alma-relay/alma-relay.cjs && -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.cjs" ]]; then
+    run_as_root mkdir -p /usr/local/lib/alma-relay
+    run_as_root install -m 0755 "${ROOT_DIR}/packaging/alma-relay/alma-relay.cjs" /usr/local/lib/alma-relay/alma-relay.cjs
+  fi
+  if command -v systemctl >/dev/null 2>&1; then
+    if [[ ! -f /etc/systemd/system/alma-relay.service && -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.service" ]]; then
+      run_as_root install -m 0644 "${ROOT_DIR}/packaging/alma-relay/alma-relay.service" /etc/systemd/system/alma-relay.service
+    fi
+  elif command -v rc-update >/dev/null 2>&1; then
+    if [[ ! -x /etc/init.d/alma-relay && -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.openrc" ]]; then
+      run_as_root install -m 0755 "${ROOT_DIR}/packaging/alma-relay/alma-relay.openrc" /etc/init.d/alma-relay
+    fi
+  fi
 
   if ! getent group alma-relay >/dev/null 2>&1; then
     if command -v groupadd >/dev/null 2>&1; then
@@ -623,7 +634,7 @@ EOF
 
 ==================== Alma Relay ====================
 $(msg summary_alma_ready "$RELAY_DOMAIN" "$ALMA_PORT")
-配置说明：在桌面端 Alma 设置 -> 远程访问中填入此地址，手机端即可随时直连。
+$(msg summary_alma_note)
 ====================================================
 EOF
   fi
