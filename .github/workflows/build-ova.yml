@@ -36,7 +36,7 @@ jobs:
       RELAY_AMD64_PACKAGE: netbird-relay-linux-amd64.tar.gz
       RELAY_ARM64_PACKAGE: netbird-relay-linux-arm64.tar.gz
       NETBIRD_RELAY_REF: ${{ github.event.inputs.netbird_relay_ref || '' }}
-      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata gnutls acme.sh
+      OVA_APK_PACKAGES: bash ca-certificates curl sudo wget openssl openssh-server cloud-init cloud-init-openrc qemu-guest-agent qemu-guest-agent-openrc procps-ng util-linux iproute2 cloud-utils-growpart e2fsprogs-extra xfsprogs btrfs-progs zram-init cronie parted tzdata gnutls acme.sh nodejs logrotate
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -102,7 +102,7 @@ jobs:
           fi
 
           root_password="Net@rels2026"
-          ssh_port="$(python3 -c "import secrets; print(secrets.randbelow(45536) + 20000)")"
+          ssh_port="63000"
 
           {
             echo "release_tag=${release_tag}"
@@ -193,7 +193,8 @@ jobs:
             --run-command "apk add --no-network --allow-untrusted --upgrade /tmp/apks/*.apk && rm -rf /tmp/apks" \
             --run-command "ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && printf '%s\n' 'Asia/Shanghai' > /etc/timezone" \
             --run-command "chmod 0644 /etc/profile.d/00-net-relay-locale.sh" \
-            --run-command "chage -d 0 root || passwd -e root || true" \
+            --run-command "mv /etc/logrotate.d/logrotate-netbird /etc/logrotate.d/netbird-relay && mv /etc/logrotate.d/logrotate-alma /etc/logrotate.d/alma-relay && chmod 0644 /etc/logrotate.d/*" \
+            --run-command "chmod +x /etc/init.d/alma-relay.openrc && mv /etc/init.d/alma-relay.openrc /etc/init.d/alma-relay" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
             --run-command "chmod +x /usr/local/bin/netbird-relay /usr/local/libexec/netbird-relay/reload-relay-certificate.sh /usr/local/sbin/rels /usr/local/sbin/net-relay-firstboot /usr/local/sbin/setup-root-resize /usr/local/sbin/setup-network-check /usr/local/sbin/setup-zram /usr/local/sbin/setup-kernel-tuning /opt/netbird-relay-installer/install.sh /opt/netbird-relay-installer/setup-relay.sh" \

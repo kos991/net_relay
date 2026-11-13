@@ -1,0 +1,10 @@
+/var/log/netbird-relay.log /var/log/netbird-relay.err {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    copytruncate
+    size 50M
+}

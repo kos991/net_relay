@@ -34,10 +34,19 @@ update_scripts() {
 }
 
 show_status() {
+  echo "=== NetBird Relay Status ==="
   if command -v systemctl >/dev/null 2>&1; then
-    systemctl status netbird-relay --no-pager
+    systemctl status netbird-relay --no-pager || true
+    if systemctl list-unit-files alma-relay.service >/dev/null 2>&1; then
+      echo -e "\n=== Alma Relay Status ==="
+      systemctl status alma-relay --no-pager || true
+    fi
   elif command -v service >/dev/null 2>&1; then
-    service netbird-relay status
+    service netbird-relay status || true
+    if [[ -x /etc/init.d/alma-relay ]]; then
+      echo -e "\n=== Alma Relay Status ==="
+      service alma-relay status || true
+    fi
   else
     fail "systemd or OpenRC was not found."
   fi
@@ -54,12 +63,32 @@ show_logs() {
 restart_service() {
   if command -v systemctl >/dev/null 2>&1; then
     systemctl restart netbird-relay
+    if systemctl is-active --quiet alma-relay 2>/dev/null; then
+      systemctl restart alma-relay
+    fi
   elif command -v service >/dev/null 2>&1; then
     service netbird-relay restart
+    if service alma-relay status >/dev/null 2>&1; then
+      service alma-relay restart
+    fi
   else
     fail "systemd or OpenRC was not found."
   fi
 }
+
+rollback_binary() {
+  local bak_path="/usr/local/bin/netbird-relay.bak"
+  if [[ ! -f "$bak_path" ]]; then
+    echo "No previous binary backup found ($bak_path)."
+    return 1
+  fi
+  echo "Rolling back to previous netbird-relay binary..."
+  cp -f "$bak_path" "$BIN_PATH"
+  chmod 0755 "$BIN_PATH"
+  restart_service
+  echo "Rollback completed and service restarted."
+}
+
 
 load_env_file() {
   if [[ -f "$ENV_FILE" ]]; then
@@ -149,6 +178,7 @@ print_menu() {
 6) Restart service
 7) Show certificate status
 8) Show ZRAM and kernel tuning status
+9) Rollback binary to previous backup
 0) Exit
 =================================================
 EOF
@@ -167,6 +197,7 @@ while true; do
     6) restart_service ;;
     7) show_certificate_status ;;
     8) show_system_optimization_status ;;
+    9) rollback_binary ;;
     0) exit 0 ;;
     *) echo "Invalid option: ${choice}" ;;
   esac

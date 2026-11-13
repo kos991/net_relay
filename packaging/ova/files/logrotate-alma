@@ -1,0 +1,10 @@
+/var/log/alma-relay.log /var/log/alma-relay.err {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    copytruncate
+    size 50M
+}

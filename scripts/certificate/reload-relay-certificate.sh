@@ -36,9 +36,15 @@ if command -v systemctl >/dev/null 2>&1; then
   if systemctl is-active --quiet netbird-relay; then
     systemctl restart netbird-relay
   fi
+  if systemctl is-active --quiet alma-relay 2>/dev/null; then
+    systemctl restart alma-relay
+  fi
 elif command -v rc-service >/dev/null 2>&1; then
   if rc-service netbird-relay status >/dev/null 2>&1; then
     rc-service netbird-relay restart
+  fi
+  if rc-service alma-relay status >/dev/null 2>&1; then
+    rc-service alma-relay restart
   fi
 fi
 

@@ -1,0 +1,36 @@
+#!/sbin/openrc-run
+
+name="Alma Relay"
+description="Alma Remote Access Relay"
+command=/usr/bin/node
+command_args="/usr/local/lib/alma-relay/alma-relay.cjs"
+command_user="alma-relay:alma-relay"
+command_background=true
+pidfile=/run/alma-relay.pid
+output_log=/var/log/alma-relay.log
+error_log=/var/log/alma-relay.err
+
+depend() {
+  need net
+  after firewall
+}
+
+start_pre() {
+  local relay_env_file="${ALMA_RELAY_ENV_FILE:-/etc/alma-relay/relay.env}"
+  checkpath --directory --mode 0755 /run
+  checkpath --directory --mode 0755 /var/log
+  checkpath --file --owner alma-relay:alma-relay --mode 0640 "$output_log"
+  checkpath --file --owner alma-relay:alma-relay --mode 0640 "$error_log"
+  if [ -f "$relay_env_file" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        \#*|"") continue ;;
+        *=*)
+          key="${line%%=*}"
+          value="${line#*=}"
+          export "$key=$value"
+          ;;
+      esac
+    done < "$relay_env_file"
+  fi
+}

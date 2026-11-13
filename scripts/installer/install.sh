@@ -295,7 +295,11 @@ install_relay_binary() {
 
   verify_tar_paths "$package_file"
   tar -xzf "$package_file" -C "$binary_tmp_dir"
-  [[ -x "${binary_tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "$(msg missing_binary)"
+    [[ -x "${binary_tmp_dir}/netbird-relay/bin/netbird-relay" ]] || fail "$(msg missing_binary)"
+
+  if [[ -f "$BIN_PATH" ]]; then
+    run_as_root cp -f "$BIN_PATH" "${BIN_PATH}.bak" || true
+  fi
 
   run_as_root install -m 0755 -D "${binary_tmp_dir}/netbird-relay/bin/netbird-relay" "$BIN_PATH"
   run_as_root install -m 0644 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.service" /etc/systemd/system/netbird-relay.service

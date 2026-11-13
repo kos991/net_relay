@@ -2,6 +2,7 @@
 set -euo pipefail
 
 FLAG="/var/lib/net-relay/firstboot.done"
+SYSTEM_FLAG="/var/lib/net-relay/system-tuning.done"
 INSTALLER_DIR="/opt/netbird-relay-installer"
 BIN_PATH="/usr/local/bin/netbird-relay"
 ROOT_RESIZE="/usr/local/sbin/setup-root-resize"
@@ -69,24 +70,32 @@ cat <<'EOF'
 =================================================
 EOF
 
-run_preflight_checks
-echo "[2/5] 根分区扩容：尝试扩展磁盘分区和文件系统..."
-"$ROOT_RESIZE" || echo "警告：根分区扩容失败，将继续 Relay 配置。"
-echo "[2/5] 根分区扩容完成。"
+if [[ ! -f "$SYSTEM_FLAG" ]]; then
+  run_preflight_checks
+  echo "[2/5] 根分区扩容：尝试扩展磁盘分区和文件系统..."
+  "$ROOT_RESIZE" || echo "警告：根分区扩容失败，将继续 Relay 配置。"
+  echo "[2/5] 根分区扩容完成。"
 
-echo "[3/5] 网络自检：加载常见虚拟网卡模块并检查 DHCP..."
-"$NETWORK_CHECK" || echo "警告：网络自检失败，将继续 Relay 配置。"
-echo "[3/5] 网络自检完成。"
+  echo "[3/5] 网络自检：加载常见虚拟网卡模块并检查 DHCP..."
+  "$NETWORK_CHECK" || echo "警告：网络自检失败，将继续 Relay 配置。"
+  echo "[3/5] 网络自检完成。"
 
-echo "[4/5] ZRAM 和内核调优：启用压缩交换、维护任务和保守的 sysctl 配置..."
-"$ZRAM_SETUP" || echo "警告：ZRAM 初始化失败，将继续 Relay 配置。"
-"$KERNEL_TUNING" || echo "警告：内核调优失败，将继续 Relay 配置。"
-echo "[4/5] ZRAM 和内核调优完成。"
+  echo "[4/5] ZRAM 和内核调优：启用压缩交换、维护任务和保守的 sysctl 配置..."
+  "$ZRAM_SETUP" || echo "警告：ZRAM 初始化失败，将继续 Relay 配置。"
+  "$KERNEL_TUNING" || echo "警告：内核调优失败，将继续 Relay 配置。"
+  echo "[4/5] ZRAM 和内核调优完成。"
+  mkdir -p "$(dirname "$SYSTEM_FLAG")"
+  touch "$SYSTEM_FLAG"
+else
+  echo "系统调优与磁盘预检已完成，跳过底层自检步骤。"
+fi
 
 cd "$INSTALLER_DIR"
 echo "[5/5] Relay 配置向导：正在启动 NetBird Relay 配置。"
-bash ./setup-relay.sh
-
-mkdir -p "$(dirname "$FLAG")"
-touch "$FLAG"
-echo "首次启动配置完成。再次运行 rels 可打开管理菜单。"
+if bash ./setup-relay.sh; then
+  mkdir -p "$(dirname "$FLAG")"
+  touch "$FLAG"
+  echo "首次启动配置完成。再次运行 rels 可打开管理菜单。"
+else
+  echo "提示：配置向导未完成。随时输入 'rels' 即可重新运行向导完成配置。"
+fi

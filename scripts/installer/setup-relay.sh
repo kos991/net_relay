@@ -81,6 +81,12 @@ msg() {
       reserved_port) printf '%s' "Relay 端口 9000 和 9090 已被本地健康检查和指标端点占用。" ;;
       join_secret_required) printf '%s' "加入已有 Relay 节点组必须提供已有密钥。" ;;
       secret_generated) printf '%s' "Relay 身份验证密钥已自动生成。请保存它；所有节点和 Management 必须使用相同的值。" ;;
+      alma_relay_title) printf '%s' "Alma 远程访问中继配置" ;;
+      enable_alma_relay) printf '%s' "是否启用 Alma 远程访问中继 (Alma Relay)？" ;;
+      alma_port) printf '%s' "Alma Relay 端口" ;;
+      alma_key) printf '%s' "Alma Relay 访问密钥（留空则公开可用）：" ;;
+      alma_port_conflict) printf '%s' "Alma Relay 端口不能与 Relay 端口或 STUN 端口相同。" ;;
+      summary_alma_ready) printf 'Alma 远程访问中继已就绪：https://%s:%s' "$1" "$2" ;;
       summary_title) printf '%s' "配置完成" ;;
       group_create_label) printf '%s' "创建新的 Relay 节点组" ;;
       group_join_label) printf '%s' "加入已有的 Relay 节点组" ;;
@@ -484,6 +490,72 @@ restart_service() {
   fi
 }
 
+configure_alma_relay() {
+  local alma_port="restart_service() {
+  if command -v systemctl >/dev/null 2>&1; then
+    run_as_root systemctl daemon-reload
+    run_as_root systemctl enable --now netbird-relay
+    run_as_root systemctl restart netbird-relay
+  elif command -v rc-update >/dev/null 2>&1; then
+    run_as_root rc-update add netbird-relay default
+    run_as_root service netbird-relay restart
+  else
+    fail "$(msg service_required)"
+  fi
+}"
+  local alma_secret="$2"
+  local cert_file="$3"
+  local key_file="$4"
+  local config_dir="/etc/alma-relay"
+  local env_file="/etc/alma-relay/relay.env"
+
+  if ! getent group alma-relay >/dev/null 2>&1; then
+    if command -v groupadd >/dev/null 2>&1; then
+      run_as_root groupadd --system alma-relay || true
+    elif command -v addgroup >/dev/null 2>&1; then
+      run_as_root addgroup -S alma-relay || true
+    fi
+  fi
+  if ! id -u alma-relay >/dev/null 2>&1; then
+    if command -v useradd >/dev/null 2>&1; then
+      run_as_root useradd --system --no-create-home --shell /sbin/nologin -g alma-relay alma-relay || true
+    elif command -v adduser >/dev/null 2>&1; then
+      run_as_root adduser -S -D -H -s /sbin/nologin -G alma-relay alma-relay || true
+    fi
+  fi
+
+  if id -u alma-relay >/dev/null 2>&1 && getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
+    if command -v usermod >/dev/null 2>&1; then
+      run_as_root usermod -a -G "$SERVICE_GROUP" alma-relay || true
+    elif command -v addgroup >/dev/null 2>&1; then
+      run_as_root addgroup alma-relay "$SERVICE_GROUP" || true
+    fi
+  fi
+
+  local tmp_file
+  tmp_file="$(mktemp)"
+  cat > "$tmp_file" <<EOF
+PORT=${alma_port}
+HOST=0.0.0.0
+TLS_CERT_FILE=${cert_file}
+TLS_KEY_FILE=${key_file}
+RELAY_REGISTRATION_KEY=${alma_secret}
+EOF
+
+  run_as_root mkdir -p "$config_dir"
+  run_as_root install -m 0600 "$tmp_file" "$env_file"
+  rm -f "$tmp_file"
+
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files alma-relay.service >/dev/null 2>&1; then
+    run_as_root systemctl daemon-reload
+    run_as_root systemctl enable --now alma-relay || true
+    run_as_root systemctl restart alma-relay || true
+  elif command -v rc-update >/dev/null 2>&1 && [[ -x /etc/init.d/alma-relay ]]; then
+    run_as_root rc-update add alma-relay default || true
+    run_as_root service alma-relay restart || true
+  fi
+}
+
 print_header() {
   echo -e "${GREEN}=================================================${NC}"
   echo -e "${GREEN}              $(msg wizard_title)              ${NC}"
@@ -545,6 +617,16 @@ $(msg common_commands)
   journalctl -u netbird-relay -f
   service netbird-relay status
 EOF
+
+  if [[ "${ALMA_ENABLED:-0}" == "1" ]]; then
+    cat <<EOF
+
+==================== Alma Relay ====================
+$(msg summary_alma_ready "$RELAY_DOMAIN" "$ALMA_PORT")
+配置说明：在桌面端 Alma 设置 -> 远程访问中填入此地址，手机端即可随时直连。
+====================================================
+EOF
+  fi
 }
 
 main() {
@@ -586,6 +668,24 @@ main() {
   ensure_certificate "$RELAY_DOMAIN" "$TLS_CERT_FILE" "$TLS_KEY_FILE"
   protect_binary_runtime_files
   restart_service
+
+  ALMA_ENABLED=0
+  if [[ -f /usr/local/lib/alma-relay/alma-relay.cjs || -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.cjs" ]]; then
+    echo
+    echo -e "${GREEN}=== $(msg alma_relay_title) ===${NC}"
+    local enable_alma
+    enable_alma="$(prompt_default "$(msg enable_alma_relay) [Y/n] " 'Y')"
+    if [[ "$enable_alma" =~ ^[Yy]$ ]]; then
+      ALMA_PORT="$(prompt_default "$(msg alma_port) [8787] " '8787')"
+      validate_port "$ALMA_PORT" || fail "$(msg invalid_port "$ALMA_PORT")"
+      [[ "$ALMA_PORT" != "$RELAY_PORT" && "$ALMA_PORT" != "$STUN_PORT" ]] || fail "$(msg alma_port_conflict)"
+      [[ "$ALMA_PORT" != "9000" && "$ALMA_PORT" != "9090" ]] || fail "$(msg reserved_port)"
+      ALMA_KEY="$(read_secret "$(msg alma_key) ")"
+      configure_alma_relay "$ALMA_PORT" "$ALMA_KEY" "$TLS_CERT_FILE" "$TLS_KEY_FILE"
+      ALMA_ENABLED=1
+    fi
+  fi
+
   print_summary
 }
 
