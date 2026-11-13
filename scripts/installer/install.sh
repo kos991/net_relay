@@ -8,6 +8,7 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/netbird-relay-installer}"
 BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/netbird-relay}"
 RELS_LANG="${RELS_LANG:-}"
+FORCE_UPDATE_SCRIPTS="${FORCE_UPDATE_SCRIPTS:-0}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -323,7 +324,8 @@ install_installer_asset() {
   local mode="$5"
   local downloaded_file=""
 
-  if [[ -f "$source_file" ]]; then
+  if [[ -f "$source_file" && "$FORCE_UPDATE_SCRIPTS" != "1" ]]; then
+  if [[ -f "$source_file" && "$FORCE_UPDATE_SCRIPTS" != "1" ]]; then
     if [[ "$source_file" == "$destination" ]]; then
       return 0
     fi

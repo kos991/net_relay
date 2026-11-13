@@ -26,6 +26,13 @@ update_binary() {
   bash ./install.sh
 }
 
+update_scripts() {
+  require_installer_dir
+  cd "$INSTALLER_DIR"
+  echo "Downloading and installing the latest installer scripts..."
+  FORCE_UPDATE_SCRIPTS=1 bash ./install.sh --update-scripts-only
+}
+
 show_status() {
   if command -v systemctl >/dev/null 2>&1; then
     systemctl status netbird-relay --no-pager
@@ -136,11 +143,12 @@ print_menu() {
 =================================================
 1) Install or reconfigure Relay
 2) Update binary and restart service
-3) Show service status
-4) Show service logs
-5) Restart service
-6) Show certificate status
-7) Show ZRAM and kernel tuning status
+3) Update installer scripts
+4) Show service status
+5) Show service logs
+6) Restart service
+7) Show certificate status
+8) Show ZRAM and kernel tuning status
 0) Exit
 =================================================
 EOF
@@ -153,11 +161,12 @@ while true; do
   case "$choice" in
     1) run_install ;;
     2) update_binary ;;
-    3) show_status ;;
-    4) show_logs ;;
-    5) restart_service ;;
-    6) show_certificate_status ;;
-    7) show_system_optimization_status ;;
+    3) update_scripts ;;
+    4) show_status ;;
+    5) show_logs ;;
+    6) restart_service ;;
+    7) show_certificate_status ;;
+    8) show_system_optimization_status ;;
     0) exit 0 ;;
     *) echo "Invalid option: ${choice}" ;;
   esac

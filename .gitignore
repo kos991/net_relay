@@ -5,3 +5,4 @@ certs/
 .worktrees/
 logs/
 .claude/
+.alma-snapshots
