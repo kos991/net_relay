@@ -171,6 +171,8 @@ jobs:
             --mkdir /etc/profile.d \
             --mkdir /etc/modules-load.d \
             --mkdir /etc/sysctl.d \
+            --mkdir /usr/local/lib/alma-relay \
+            --mkdir /etc/logrotate.d \
             --copy-in ova-build/apks:/tmp \
             --copy-in ova-build/relay-package/netbird-relay/bin/netbird-relay:/usr/local/bin \
             --copy-in ova-build/relay-package/netbird-relay/services/netbird-relay.openrc:/etc/init.d \
@@ -190,10 +192,14 @@ jobs:
             --copy-in packaging/ova/files/99-net-relay-login.cfg:/etc/cloud/cloud.cfg.d \
             --copy-in packaging/ova/files/99-net-relay-sysctl.conf:/etc/sysctl.d \
             --copy-in packaging/ova/files/root-profile:/root \
+            --copy-in packaging/alma-relay/alma-relay.cjs:/usr/local/lib/alma-relay \
+            --copy-in packaging/alma-relay/alma-relay.openrc:/etc/init.d \
+            --copy-in packaging/ova/files/logrotate.d/netbird-relay:/etc/logrotate.d \
+            --copy-in packaging/ova/files/logrotate.d/alma-relay:/etc/logrotate.d \
             --run-command "apk add --no-network --allow-untrusted --upgrade /tmp/apks/*.apk && rm -rf /tmp/apks" \
             --run-command "ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && printf '%s\n' 'Asia/Shanghai' > /etc/timezone" \
             --run-command "chmod 0644 /etc/profile.d/00-net-relay-locale.sh" \
-            --run-command "mv /etc/logrotate.d/logrotate-netbird /etc/logrotate.d/netbird-relay && mv /etc/logrotate.d/logrotate-alma /etc/logrotate.d/alma-relay && chmod 0644 /etc/logrotate.d/*" \
+            --run-command "chmod 0644 /etc/logrotate.d/netbird-relay /etc/logrotate.d/alma-relay 2>/dev/null || true" \
             --run-command "chmod +x /etc/init.d/alma-relay.openrc && mv /etc/init.d/alma-relay.openrc /etc/init.d/alma-relay" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /etc/ssh/sshd_config" \
             --run-command "sed -i 's/__SSH_PORT__/${SSH_PORT}/' /usr/local/sbin/net-relay-firstboot" \
