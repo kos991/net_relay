@@ -9,6 +9,8 @@ BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/netbird-relay}"
 RELS_LANG="${RELS_LANG:-}"
 FORCE_UPDATE_SCRIPTS="${FORCE_UPDATE_SCRIPTS:-0}"
+CERT_RELOAD_PATH="${CERT_RELOAD_PATH:-/usr/local/libexec/netbird-relay/reload-relay-certificate.sh}"
+RELS_PATH="${RELS_PATH:-/usr/local/sbin/rels}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -117,22 +119,7 @@ run_as_root() {
   fi
 }
 
-validate_args() {
-  while [[ "$#" -gt 0 ]]; do
-    case "$1" in
-      --binary)
-        ;;
-      --compose|--docker-compose)
-        fail "$(msg compose_removed)"
-        ;;
-      *)
-        fail "$(msg unknown_arg "$1")"
-        ;;
-    esac
-    shift
-  done
 
-}
 
 validate_release_base() {
   case "$RELEASE_BASE" in
@@ -269,8 +256,7 @@ verify_sha256() {
   elif command -v shasum >/dev/null 2>&1; then
     actual_hash="$(shasum -a 256 "$package_file" | awk '{print $1}')"
   else
-    warn "$(msg hash_missing_warn)"
-    return 0
+    fail "SHA256 verification requires sha256sum or shasum."
   fi
 
   [[ "$actual_hash" == "$expected_hash" ]] || fail "SHA256 verification failed for ${package_name}."
@@ -316,29 +302,31 @@ install_relay_binary() {
   run_as_root install -m 0755 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.openrc" /etc/init.d/netbird-relay
 }
 
-install_installer_asset() {
+install_installer_asset() (
   local source_file="$1"
   local release_name="$2"
   local destination="$3"
   local sums_file="$4"
   local mode="$5"
+  local stage=""
   local downloaded_file=""
+  trap 'rm -f -- "${downloaded_file:-}"; [[ -z "$stage" ]] || run_as_root rm -rf -- "$stage"' EXIT
 
-  if [[ -f "$source_file" && "$FORCE_UPDATE_SCRIPTS" != "1" ]]; then
   if [[ -f "$source_file" && "$FORCE_UPDATE_SCRIPTS" != "1" ]]; then
     if [[ "$source_file" == "$destination" ]]; then
       return 0
     fi
-    run_as_root install -m "$mode" -D "$source_file" "$destination"
-    return 0
+  else
+    downloaded_file="$(mktemp)"
+    download_file "${RELEASE_BASE}/${release_name}" "$downloaded_file"
+    verify_sha256 "$downloaded_file" "$sums_file" "$release_name"
+    source_file="$downloaded_file"
   fi
-
-  downloaded_file="$(mktemp)"
-  download_file "${RELEASE_BASE}/${release_name}" "$downloaded_file"
-  verify_sha256 "$downloaded_file" "$sums_file" "$release_name"
-  run_as_root install -m "$mode" -D "$downloaded_file" "$destination"
-  rm -f "$downloaded_file"
-}
+  run_as_root mkdir -p -- "$(dirname "$destination")"
+  stage="$(run_as_root mktemp -d "$(dirname "$destination")/.rels-install.XXXXXX")"
+  run_as_root install -m "$mode" "$source_file" "$stage/new"
+  run_as_root mv -f -- "$stage/new" "$destination"
+)
 
 install_installer_files() {
   local sums_file="$1"
@@ -349,15 +337,100 @@ install_installer_files() {
   run_as_root mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
   install_installer_asset "$source_dir/setup-relay.sh" setup-relay.sh "$INSTALL_DIR/setup-relay.sh" "$sums_file" 0755
   install_installer_asset "$source_dir/reload-relay-certificate.sh" reload-relay-certificate.sh /usr/local/libexec/netbird-relay/reload-relay-certificate.sh "$sums_file" 0755
-  if [[ "$source_file" != "$INSTALL_DIR/install.sh" ]]; then
-    install_installer_asset "$source_file" install.sh "$INSTALL_DIR/install.sh" "$sums_file" 0755
-  fi
+  install_installer_asset "$source_file" install.sh "$INSTALL_DIR/install.sh" "$sums_file" 0755
 }
 
+update_scripts_only() (
+  # Subshell keeps cleanup traps and temporary paths alive through every failure.
+  set -e
+  tmp_dir="$(mktemp -d)"
+  local -a names=(install.sh setup-relay.sh reload-relay-certificate.sh rels)
+  local -a destinations=("$INSTALL_DIR/install.sh" "$INSTALL_DIR/setup-relay.sh" "$CERT_RELOAD_PATH" "$RELS_PATH")
+  local -a stages=() existed=()
+  local i committed=0 complete=0
+  cleanup_update() {
+    local status=$? j
+    trap - EXIT
+    if [[ "$complete" != 1 ]]; then
+      for ((j=committed-1; j>=0; j--)); do
+        if [[ "${existed[j]}" == 1 ]]; then
+          if ! run_as_root mv -f -- "${stages[j]}/old" "${destinations[j]}"; then
+            warn "Rollback failed; original retained at ${stages[j]}/old"
+            stages[j]=""
+            status=1
+          fi
+        else
+          run_as_root rm -f -- "${destinations[j]}" || status=1
+        fi
+      done
+    fi
+    for j in "${stages[@]}"; do
+      [[ -z "$j" ]] || run_as_root rm -rf -- "$j"
+    done
+    rm -rf -- "$tmp_dir"
+    exit "$status"
+  }
+  trap cleanup_update EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  download_file "${RELEASE_BASE}/SHA256SUMS" "$tmp_dir/SHA256SUMS"
+  for i in "${!names[@]}"; do
+    download_file "${RELEASE_BASE}/${names[i]}" "$tmp_dir/${names[i]}"
+    verify_sha256 "$tmp_dir/${names[i]}" "$tmp_dir/SHA256SUMS" "${names[i]}"
+    bash -n "$tmp_dir/${names[i]}"
+  done
+  # Stage every replacement beside its destination before touching any live file.
+  for i in "${!names[@]}"; do
+    run_as_root mkdir -p -- "$(dirname "${destinations[i]}")"
+    stages[i]="$(run_as_root mktemp -d "$(dirname "${destinations[i]}")/.rels-update.XXXXXX")"
+    existed[i]=0
+    if [[ -e "${destinations[i]}" || -L "${destinations[i]}" ]]; then
+      [[ ! -d "${destinations[i]}" ]] || fail "Script destination is a directory: ${destinations[i]}"
+      run_as_root cp -pP -- "${destinations[i]}" "${stages[i]}/old"
+      existed[i]=1
+    fi
+    run_as_root install -m 0755 "$tmp_dir/${names[i]}" "${stages[i]}/new"
+  done
+  for i in "${!names[@]}"; do
+    committed=$((i+1))
+    run_as_root mv -f -- "${stages[i]}/new" "${destinations[i]}"
+  done
+  complete=1
+  log "Scripts updated successfully (including rels); no configuration wizard was started."
+)
+
 main() {
-  select_language
-  validate_args "$@"
+  local scripts_only=0
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --scripts-only|--update-scripts-only)
+        scripts_only=1
+        shift
+        ;;
+      --binary)
+        shift
+        ;;
+      --compose|--docker-compose)
+        fail "$(msg compose_removed)"
+        ;;
+      *)
+        fail "$(msg unknown_arg "$1")"
+        ;;
+    esac
+  done
+
+  if [[ "$scripts_only" == "1" ]]; then
+    RELS_LANG="${RELS_LANG:-en}"
+  else
+    select_language
+  fi
   validate_release_base
+
+  if [[ "$scripts_only" == "1" ]]; then
+    update_scripts_only
+    return 0
+  fi
+
   detect_os
   install_base_dependencies
   ensure_scheduler

@@ -30,7 +30,7 @@ update_scripts() {
   require_installer_dir
   cd "$INSTALLER_DIR"
   echo "Downloading and installing the latest installer scripts..."
-  FORCE_UPDATE_SCRIPTS=1 bash ./install.sh --update-scripts-only
+  FORCE_UPDATE_SCRIPTS=1 bash ./install.sh --scripts-only
 }
 
 show_status() {
@@ -142,7 +142,7 @@ print_menu() {
               NetBird Relay Management Menu
 =================================================
 1) Install or reconfigure Relay
-2) Update binary and restart service
+2) Update binary and run setup wizard
 3) Update installer scripts
 4) Show service status
 5) Show service logs

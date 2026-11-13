@@ -126,6 +126,7 @@ jobs:
           cp scripts/installer/install.sh release/install.sh
           cp scripts/installer/setup-relay.sh release/setup-relay.sh
           cp scripts/certificate/reload-relay-certificate.sh release/reload-relay-certificate.sh
+          cp packaging/ova/files/rels release/rels
 
       - name: Download Alpine cloud image
         run: |
@@ -285,7 +286,7 @@ jobs:
 
       - name: Generate release checksums
         run: |
-          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$VHD_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh setup-relay.sh reload-relay-certificate.sh > SHA256SUMS)
+          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$VHD_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh setup-relay.sh reload-relay-certificate.sh rels > SHA256SUMS)
 
       - name: Write release notes
         run: |
@@ -317,6 +318,7 @@ jobs:
           - install.sh: one-click installer for Debian, Ubuntu, Rocky, Alma, and Alpine.
           - setup-relay.sh: binary Relay configuration wizard.
           - reload-relay-certificate.sh: certificate validation and Relay restart hook.
+          - rels: management menu; option 3 updates scripts only, option 8 shows system tuning status.
           - SHA256SUMS: SHA256 checksums for all published artifacts.
 
           ## OVA access
@@ -334,7 +336,7 @@ jobs:
           - Expands the root partition when the virtual disk has been resized.
           - Runs DHCP and network preflight checks on first boot.
           - Installs cloud-init, qemu-guest-agent, VirtIO support, xfsprogs, and btrfs-progs.
-          - Run \`rels\` and choose option 7 to view ZRAM and kernel optimization status.
+          - Run \`rels\` and choose option 8 to view ZRAM and kernel optimization status.
 
           ## Verification
 
@@ -383,4 +385,5 @@ jobs:
             "release/install.sh" \
             "release/setup-relay.sh" \
             "release/reload-relay-certificate.sh" \
+            "release/rels" \
             release/SHA256SUMS

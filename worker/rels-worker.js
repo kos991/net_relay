@@ -1,7 +1,10 @@
 const RELEASE_BASE = "https://github.com/kos991/net_relay/releases/latest/download";
 const SOURCE_INSTALL_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/scripts/installer/install.sh";
 const SOURCE_SETUP_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/scripts/installer/setup-relay.sh";
+const SOURCE_RELS_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/packaging/ova/files/rels";
+const SOURCE_RELOAD_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/scripts/certificate/reload-relay-certificate.sh";
 const RELEASE_ASSETS = new Set([
+  "rels",
   "install.sh",
   "SHA256SUMS",
   "netbird-relay-linux-amd64.tar.gz",
@@ -79,7 +82,7 @@ async function sha256Hex(text) {
 }
 
 async function proxyChecksums() {
-  const [sumsResponse, installResponse, setupResponse] = await Promise.all([
+  const [sumsResponse, installResponse, setupResponse, relsResponse, reloadResponse] = await Promise.all([
     fetch(`${RELEASE_BASE}/SHA256SUMS`, {
       headers: { "user-agent": "net-relay-worker" },
     }),
@@ -89,9 +92,15 @@ async function proxyChecksums() {
     fetch(SOURCE_SETUP_URL, {
       headers: { "user-agent": "net-relay-worker" },
     }),
+    fetch(SOURCE_RELS_URL, {
+      headers: { "user-agent": "net-relay-worker" },
+    }),
+    fetch(SOURCE_RELOAD_URL, {
+      headers: { "user-agent": "net-relay-worker" },
+    }),
   ]);
 
-  if (!sumsResponse.ok || !installResponse.ok || !setupResponse.ok) {
+  if (!sumsResponse.ok || !installResponse.ok || !setupResponse.ok || !relsResponse.ok || !reloadResponse.ok) {
     return new Response("Failed to fetch checksums\n", {
       status: 502,
       headers: { "content-type": "text/plain; charset=utf-8" },
@@ -106,6 +115,8 @@ async function proxyChecksums() {
   const hashes = new Map([
     ["install.sh", await sha256Hex(installText)],
     ["setup-relay.sh", await sha256Hex(setupText)],
+    ["rels", await sha256Hex(await relsResponse.text())],
+    ["reload-relay-certificate.sh", await sha256Hex(await reloadResponse.text())],
   ]);
   const found = new Set();
   let output = sumsText
@@ -161,6 +172,12 @@ export default {
       }
       if (assetName === "setup-relay.sh") {
         return proxySetupScript();
+      }
+      if (assetName === "rels") {
+        return proxySourceScript(SOURCE_RELS_URL, "rels");
+      }
+      if (assetName === "reload-relay-certificate.sh") {
+        return proxySourceScript(SOURCE_RELOAD_URL, assetName);
       }
       if (assetName === "SHA256SUMS") {
         return proxyChecksums();

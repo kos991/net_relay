@@ -1,3 +1,10 @@
+# Setup: enable Copilot cloud agent for this repository and grant the token owner access.
+# Store a fine-grained PAT as COPILOT_AGENT_TOKEN (repository Issues and Pull requests: write;
+# Contents: read), authorize organization SSO if required; GITHUB_TOKEN creates the issue.
+# Test: Actions > repair-build > Run workflow, enter a failed main-branch run_id and keep
+# dry_run=true; inspect the summary first. Set false to create/assign the repair issue.
+# Assignment errors: check token permissions, repository access and Copilot availability;
+# rerun after fixing access. Maintainers review the PR; this workflow never merges it.
 name: repair-build
 
 on:
@@ -82,7 +89,7 @@ jobs:
               return;
             }
             const token = process.env.COPILOT_AGENT_TOKEN;
-            if (!token) throw new Error('Configure COPILOT_AGENT_TOKEN and enable Copilot cloud agent; see README.md');
+            if (!token) throw new Error('Configure COPILOT_AGENT_TOKEN and enable Copilot cloud agent; see workflow header comments');
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner, repo, state: 'all', creator: 'github-actions[bot]', per_page: 100,
             });
