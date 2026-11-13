@@ -3640,10 +3640,9 @@ var require_websocket_server = __commonJS({
 // index.mjs
 var import_node_http = require("node:http");
 var import_node_https = require("node:https");
-var import_node_fs = require("node:fs");
 var import_node_http2 = require("node:http2");
 var import_node_crypto = require("node:crypto");
-var import_node_fs2 = require("node:fs");
+var import_node_fs = require("node:fs");
 
 // node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
@@ -4057,7 +4056,7 @@ var PAUSED_PONG_MS = 5e3;
 var PAUSE_LOG_MS = 2e3;
 var apnsEnv = {
   ...env,
-  APNS_KEY: env.APNS_KEY || (env.APNS_KEY_FILE ? (0, import_node_fs2.readFileSync)(env.APNS_KEY_FILE, "utf8") : "")
+  APNS_KEY: env.APNS_KEY || (env.APNS_KEY_FILE ? (0, import_node_fs.readFileSync)(env.APNS_KEY_FILE, "utf8") : "")
 };
 var apnsSigner = null;
 try {
@@ -4070,7 +4069,7 @@ var fcmSender = null;
 try {
   fcmSender = fcmSenderFromEnv({
     ...env,
-    FCM_SERVICE_ACCOUNT: env.FCM_SERVICE_ACCOUNT || (env.FCM_SERVICE_ACCOUNT_FILE ? (0, import_node_fs2.readFileSync)(env.FCM_SERVICE_ACCOUNT_FILE, "utf8") : "")
+    FCM_SERVICE_ACCOUNT: env.FCM_SERVICE_ACCOUNT || (env.FCM_SERVICE_ACCOUNT_FILE ? (0, import_node_fs.readFileSync)(env.FCM_SERVICE_ACCOUNT_FILE, "utf8") : "")
   });
 } catch (err) {
   console.error("[relay] FCM service account misconfigured:", err instanceof Error ? err.message : err);
@@ -4381,7 +4380,7 @@ var TLS_CERT = env.TLS_CERT_FILE || env.SSL_CERT;
 var TLS_KEY = env.TLS_KEY_FILE || env.SSL_KEY;
 function initServer(handler) {
   if (TLS_CERT && TLS_KEY && (0, import_node_fs.existsSync)(TLS_CERT) && (0, import_node_fs.existsSync)(TLS_KEY)) {
-    return (0, import_node_https.createServer)({ cert: (0, import_node_fs2.readFileSync)(TLS_CERT), key: (0, import_node_fs2.readFileSync)(TLS_KEY) }, handler);
+    return (0, import_node_https.createServer)({ cert: (0, import_node_fs.readFileSync)(TLS_CERT), key: (0, import_node_fs.readFileSync)(TLS_KEY) }, handler);
   }
   return (0, import_node_http.createServer)(handler);
 }

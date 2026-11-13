@@ -54,7 +54,10 @@ log "Building Alma Relay ${ALMA_RELAY_REF} (${commit})"
     if (!code.includes('createHttpsServer')) {
       code = code.replace(
         \"import { createServer } from 'node:http';\",
-        \"import { createServer as createHttpServer } from 'node:http';\\nimport { createServer as createHttpsServer } from 'node:https';\\nimport { existsSync, readFileSync } from 'node:fs';\"
+        \"import { createServer as createHttpServer } from 'node:http';\\nimport { createServer as createHttpsServer } from 'node:https';\"
+      ).replace(
+        \"import { readFileSync } from 'node:fs';\",
+        \"import { readFileSync, existsSync } from 'node:fs';\"
       ).replace(
         \"const server = createServer((req, res) => {\",
         \"const TLS_CERT = env.TLS_CERT_FILE || env.SSL_CERT;\\nconst TLS_KEY = env.TLS_KEY_FILE || env.SSL_KEY;\\nfunction initServer(handler) {\\n    if (TLS_CERT && TLS_KEY && existsSync(TLS_CERT) && existsSync(TLS_KEY)) {\\n        return createHttpsServer({ cert: readFileSync(TLS_CERT), key: readFileSync(TLS_KEY) }, handler);\\n    }\\n    return createHttpServer(handler);\\n}\\nconst server = initServer((req, res) => {\"
