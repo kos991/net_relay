@@ -302,24 +302,8 @@ jobs:
 
           ## Release channel
 
-          - Channel: stable (`v1.0.N` only).
+          - Channel: stable (\`v1.0.N\` only).
           - NetBird Relay upstream ref: ${NETBIRD_RELAY_REF}
-
-          ## Published assets
-
-          - ${RELAY_AMD64_PACKAGE}: Linux amd64 official relay binary package.
-          - ${RELAY_ARM64_PACKAGE}: Linux arm64 official relay binary package.
-          - ${OVA_NAME}: OVA with OVF network Connection for importers that require it.
-          - ${OVA_MINIMAL_NAME}: OVA without OVF network Connection for strict importers that reject it.
-          - ${RAW_NAME}: RAW image for cloud import workflows such as Aliyun custom images.
-          - ${VHD_NAME}: VHD image for cloud import workflows such as Aliyun custom images.
-          - ${QCOW2_NAME}: Standalone QCOW2 v1.1 image for cloud import workflows such as Aliyun custom images.
-          - main.sh: secure bootstrap script served by https://rels.jinfei.org.
-          - install.sh: one-click installer for Debian, Ubuntu, Rocky, Alma, and Alpine.
-          - setup-relay.sh: binary Relay configuration wizard.
-          - reload-relay-certificate.sh: certificate validation and Relay restart hook.
-          - rels: management menu; option 3 updates scripts only, option 8 shows system tuning status.
-          - SHA256SUMS: SHA256 checksums for all published artifacts.
 
           ## OVA access
 
@@ -328,15 +312,6 @@ jobs:
           - SSH port: ${SSH_PORT}
           - Login command: \`ssh -p ${SSH_PORT} root@<OVA_IP>\`
           - First login will force a root password change before initialization continues.
-
-          ## OVA initialization
-
-          - Enables ZRAM swap and daily ZRAM compact maintenance.
-          - Applies the conservative NetBird Relay kernel tuning profile.
-          - Expands the root partition when the virtual disk has been resized.
-          - Runs DHCP and network preflight checks on first boot.
-          - Installs cloud-init, qemu-guest-agent, VirtIO support, xfsprogs, and btrfs-progs.
-          - Run \`rels\` and choose option 8 to view ZRAM and kernel optimization status.
 
           ## Verification
 

@@ -251,8 +251,11 @@ if grep -q "virt-customize --format qcow2" "$BUILD_OVA"; then
   exit 1
 fi
 grep -q "ln -sf /usr/local/sbin/rels /usr/local/bin/rels" "$BUILD_OVA"
-grep -q "Enables ZRAM swap" "$BUILD_OVA"
-grep -q "kernel tuning profile" "$BUILD_OVA"
+if grep -Eq '## Published assets|## OVA initialization' "$BUILD_OVA"; then
+  echo "Release notes must omit the asset catalog and OVA initialization details." >&2
+  exit 1
+fi
+
 grep -q "AddressOnParent" "$BUILD_OVA"
 grep -q "rasd:Connection" "$BUILD_OVA"
 grep -q "write_ovf release/net-relay-alpine-x86_64-minimal.ovf ''" "$BUILD_OVA"
