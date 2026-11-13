@@ -171,14 +171,14 @@ print_menu() {
               NetBird Relay Management Menu
 =================================================
 1) Install or reconfigure Relay
-2) Update binary and run setup wizard
-3) Update installer scripts
+2) Update Relay binary (keeps config)
+3) Update management scripts (rels/install/setup)
 4) Show service status
-5) Show service logs
-6) Restart service
+5) Show service logs (real-time)
+6) Restart Relay service
 7) Show certificate status
 8) Show ZRAM and kernel tuning status
-9) Rollback binary to previous backup
+9) Rollback Relay binary to previous backup
 0) Exit
 =================================================
 EOF
