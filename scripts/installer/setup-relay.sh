@@ -417,8 +417,12 @@ issue_cloudflare_certificate() {
   acme="$(ensure_acme_sh)"
   reloadcmd="$(service_reload_command)"
 
+  local issue_rc=0
   run_as_root env HOME=/root "$acme" --set-default-ca --server letsencrypt
-  run_as_root env HOME=/root CF_Token="$CF_API_TOKEN" "$acme" --issue --dns dns_cf -d "$domain" --keylength ec-256
+  run_as_root env HOME=/root CF_Token="$CF_API_TOKEN" "$acme" --issue --dns dns_cf -d "$domain" --keylength ec-256 || issue_rc=$?
+  if (( issue_rc != 0 && issue_rc != 2 )); then
+    return "$issue_rc"
+  fi
   run_as_root env HOME=/root "$acme" --install-cert -d "$domain" --ecc \
     --fullchain-file "$cert_file" \
     --key-file "$key_file" \

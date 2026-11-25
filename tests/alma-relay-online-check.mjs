@@ -213,6 +213,65 @@ try {
     }
     console.log(`alma-relay setup ${mode}: passed`);
   }
+
+  // 3. Test issue_cloudflare_certificate accepts acme.sh exit code 2 (unchanged valid cert) and fails on exit code 1
+  for (const scenario of ["skip-exit-2", "error-exit-1"]) {
+    const dir = path.join(tmp, `acme-${scenario}`);
+    fs.mkdirSync(dir);
+    const isolatedSetup = path.join(dir, "setup-relay.sh");
+    fs.copyFileSync("scripts/installer/setup-relay.sh", isolatedSetup);
+    const logFile = path.join(dir, "acme.log");
+    const fakeAcme = path.join(dir, "acme.sh");
+    const issueExit = scenario === "skip-exit-2" ? 2 : 1;
+    fs.writeFileSync(
+      fakeAcme,
+      `#!/bin/sh
+echo "acme $*" >> "$ACME_LOG"
+for arg in "$@"; do
+  if [ "$arg" = "--issue" ]; then
+    exit ${issueExit}
+  fi
+done
+exit 0
+`,
+      { mode: 0o755 },
+    );
+
+    const script = `
+      set +o posix
+      set -euo pipefail
+      sudo() { "$@"; }
+      source "$ISOLATED_SETUP"
+      ensure_cron_service() { :; }
+      ensure_acme_sh() { printf '%s' "$FAKE_ACME"; }
+      ACME_EMAIL="test@example.com"
+      CF_API_TOKEN="dummy-token"
+      issue_cloudflare_certificate "relay.example.com" "$CERT_DIR/fullchain.pem" "$CERT_DIR/privkey.pem"
+    `;
+
+    const res = spawnSync(shell, ["-c", script], {
+      env: {
+        ...process.env,
+        ACME_LOG: shellPath(logFile),
+        FAKE_ACME: shellPath(fakeAcme),
+        ISOLATED_SETUP: shellPath(isolatedSetup),
+        CERT_DIR: shellPath(path.join(dir, "certs")),
+      },
+      encoding: "utf8",
+      timeout: 30000,
+    });
+
+    const calls = fs.existsSync(logFile) ? fs.readFileSync(logFile, "utf8") : "";
+    if (scenario === "skip-exit-2") {
+      assert.equal(res.status, 0, `issue_cloudflare_certificate must allow acme.sh exit 2: ${res.stderr}`);
+      assert.ok(calls.includes("--issue"), calls);
+      assert.ok(calls.includes("--install-cert"), `must still run --install-cert after exit 2: ${calls}`);
+    } else {
+      assert.equal(res.status, 1, `issue_cloudflare_certificate must fail on acme.sh exit 1`);
+      assert.ok(!calls.includes("--install-cert"), `must not run --install-cert after exit 1: ${calls}`);
+    }
+    console.log(`acme cloudflare ${scenario}: passed`);
+  }
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
