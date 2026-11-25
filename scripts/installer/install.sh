@@ -11,6 +11,9 @@ RELS_LANG="${RELS_LANG:-}"
 FORCE_UPDATE_SCRIPTS="${FORCE_UPDATE_SCRIPTS:-0}"
 CERT_RELOAD_PATH="${CERT_RELOAD_PATH:-/usr/local/libexec/netbird-relay/reload-relay-certificate.sh}"
 RELS_PATH="${RELS_PATH:-/usr/local/sbin/rels}"
+ALMA_RELAY_PATH="${ALMA_RELAY_PATH:-/usr/local/lib/alma-relay/alma-relay.cjs}"
+ALMA_SYSTEMD_PATH="${ALMA_SYSTEMD_PATH:-/etc/systemd/system/alma-relay.service}"
+ALMA_OPENRC_PATH="${ALMA_OPENRC_PATH:-/etc/init.d/alma-relay}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -187,6 +190,7 @@ install_base_dependencies() {
         ca-certificates \
         cron \
         curl \
+        nodejs \
         openssl \
         tar
       ;;
@@ -198,6 +202,7 @@ install_base_dependencies() {
         ca-certificates \
         cronie \
         curl \
+        nodejs \
         openssl \
         tar
       ;;
@@ -207,6 +212,7 @@ install_base_dependencies() {
         ca-certificates \
         cronie \
         curl \
+        nodejs \
         openssl \
         tar
       ;;
@@ -335,13 +341,27 @@ install_installer_asset() (
 install_installer_files() {
   local sums_file="$1"
   local source_file="${BASH_SOURCE[0]}"
-  local source_dir
+  local source_dir repo_root
   source_dir="$(cd "$(dirname "$source_file")" && pwd)"
+  repo_root="$(cd "$source_dir/../.." 2>/dev/null && pwd || printf '%s' "$source_dir")"
 
   run_as_root mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
   install_installer_asset "$source_dir/setup-relay.sh" setup-relay.sh "$INSTALL_DIR/setup-relay.sh" "$sums_file" 0755
-  install_installer_asset "$source_dir/reload-relay-certificate.sh" reload-relay-certificate.sh /usr/local/libexec/netbird-relay/reload-relay-certificate.sh "$sums_file" 0755
+  install_installer_asset "$source_dir/reload-relay-certificate.sh" reload-relay-certificate.sh "$CERT_RELOAD_PATH" "$sums_file" 0755
+  install_installer_asset "$repo_root/packaging/ova/files/rels" rels "$RELS_PATH" "$sums_file" 0755
   install_installer_asset "$source_file" install.sh "$INSTALL_DIR/install.sh" "$sums_file" 0755
+}
+
+install_alma_relay_files() {
+  local sums_file="$1"
+  local source_file="${BASH_SOURCE[0]}"
+  local source_dir repo_root
+  source_dir="$(cd "$(dirname "$source_file")" && pwd)"
+  repo_root="$(cd "$source_dir/../.." 2>/dev/null && pwd || printf '%s' "$source_dir")"
+
+  install_installer_asset "$repo_root/packaging/alma-relay/alma-relay.cjs" alma-relay.cjs "$ALMA_RELAY_PATH" "$sums_file" 0755
+  install_installer_asset "$repo_root/packaging/alma-relay/alma-relay.service" alma-relay.service "$ALMA_SYSTEMD_PATH" "$sums_file" 0644
+  install_installer_asset "$repo_root/packaging/alma-relay/alma-relay.openrc" alma-relay.openrc "$ALMA_OPENRC_PATH" "$sums_file" 0755
 }
 
 update_scripts_only() (
@@ -447,10 +467,13 @@ main() {
   package_file="$(download_relay_package "$arch" "$tmp_dir")"
   install_relay_binary "$package_file"
   install_installer_files "$tmp_dir/SHA256SUMS"
+  install_alma_relay_files "$tmp_dir/SHA256SUMS"
 
   log "$(msg binary_installed "$BIN_PATH")"
   log "$(msg binary_wizard)"
   RELS_LANG="$RELS_LANG" exec bash "$INSTALL_DIR/setup-relay.sh"
 }
 
-main "$@"
+if [[ "${INSTALL_SH_NO_MAIN:-0}" != "1" ]]; then
+  main "$@"
+fi

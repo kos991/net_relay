@@ -3,6 +3,7 @@ set -euo pipefail
 
 INSTALLER_DIR="/opt/netbird-relay-installer"
 ENV_FILE="/etc/netbird-relay/relay.env"
+BIN_PATH="/usr/local/bin/netbird-relay"
 
 fail() {
   echo "Error: $*" >&2
@@ -53,10 +54,29 @@ show_status() {
 }
 
 show_logs() {
+  local target="netbird-relay"
+  local has_alma=0
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-unit-files alma-relay.service >/dev/null 2>&1; then
+      has_alma=1
+    fi
+  elif [[ -x /etc/init.d/alma-relay ]]; then
+    has_alma=1
+  fi
+
+  if [[ "$has_alma" == "1" ]]; then
+    printf 'Log target: 1) NetBird Relay  2) Alma Relay [1]: '
+    local log_choice=""
+    IFS= read -r log_choice || log_choice=""
+    if [[ "$log_choice" == "2" ]]; then
+      target="alma-relay"
+    fi
+  fi
+
   if command -v journalctl >/dev/null 2>&1; then
-    journalctl -u netbird-relay -f -n 120
+    journalctl -u "$target" -f -n 120
   else
-    tail -f /var/log/netbird-relay.log /var/log/netbird-relay.err
+    tail -f "/var/log/${target}.log" "/var/log/${target}.err"
   fi
 }
 

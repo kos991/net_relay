@@ -48,13 +48,23 @@ bash -n "$ROOT_PROFILE"
 sh -n "$LOCALE_PROFILE"
 node "$ROOT_DIR/tests/worker-check.mjs"
 TEST_BASH="${TEST_BASH:-$BASH}" node "$ROOT_DIR/tests/scripts-update-check.mjs"
+TEST_BASH="${TEST_BASH:-$BASH}" node "$ROOT_DIR/tests/alma-relay-online-check.mjs"
 [[ "$(awk 'END {print NR}' "$ROOT_DIR/README.md")" -le 60 ]] || {
   echo "README must contain at most 60 actual lines (including blanks)." >&2
   exit 1
 }
 grep -Fq 'cp packaging/ova/files/rels release/rels' "$BUILD_OVA"
+grep -Fq 'cp packaging/alma-relay/alma-relay.cjs release/alma-relay.cjs' "$BUILD_OVA"
+grep -Fq 'cp packaging/alma-relay/alma-relay.service release/alma-relay.service' "$BUILD_OVA"
+grep -Fq 'cp packaging/alma-relay/alma-relay.openrc release/alma-relay.openrc' "$BUILD_OVA"
 grep -Fq 'reload-relay-certificate.sh rels > SHA256SUMS' "$BUILD_OVA"
 grep -Fq '"release/rels"' "$BUILD_OVA"
+grep -Fq '"release/alma-relay.cjs"' "$BUILD_OVA"
+grep -Fq '"release/alma-relay.service"' "$BUILD_OVA"
+grep -Fq '"release/alma-relay.openrc"' "$BUILD_OVA"
+grep -Fq 'install_alma_relay_files' "$INSTALL"
+grep -Fq 'ALMA_RELAY_PATH' "$SETUP"
+grep -Fq 'SOURCE_ALMA_BUNDLE_URL' "$WORKER"
 grep -Fq -- '--scripts-only' "$RELS"
 grep -Fq '8) Show ZRAM and kernel tuning status' "$RELS"
 

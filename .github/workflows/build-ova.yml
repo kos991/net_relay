@@ -151,6 +151,9 @@ jobs:
           cp scripts/installer/setup-relay.sh release/setup-relay.sh
           cp scripts/certificate/reload-relay-certificate.sh release/reload-relay-certificate.sh
           cp packaging/ova/files/rels release/rels
+          cp packaging/alma-relay/alma-relay.cjs release/alma-relay.cjs
+          cp packaging/alma-relay/alma-relay.service release/alma-relay.service
+          cp packaging/alma-relay/alma-relay.openrc release/alma-relay.openrc
 
       - name: Download Alpine cloud image
         run: |
@@ -317,7 +320,7 @@ jobs:
 
       - name: Generate release checksums
         run: |
-          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$VHD_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh setup-relay.sh reload-relay-certificate.sh rels > SHA256SUMS)
+          (cd release && sha256sum "$OVA_NAME" "$OVA_MINIMAL_NAME" "$RAW_NAME" "$VHD_NAME" "$QCOW2_NAME" "$INSTALLER_ARCHIVE_NAME" "$RELAY_AMD64_PACKAGE" "$RELAY_ARM64_PACKAGE" main.sh install.sh setup-relay.sh alma-relay.cjs alma-relay.service alma-relay.openrc reload-relay-certificate.sh rels > SHA256SUMS)
 
       - name: Write release notes
         env:
@@ -447,4 +450,7 @@ jobs:
             "release/setup-relay.sh" \
             "release/reload-relay-certificate.sh" \
             "release/rels" \
+            "release/alma-relay.cjs" \
+            "release/alma-relay.service" \
+            "release/alma-relay.openrc" \
             release/SHA256SUMS

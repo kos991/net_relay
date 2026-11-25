@@ -8,6 +8,9 @@ const sources = new Map([
   ["setup-relay.sh", "scripts/installer/setup-relay.sh"],
   ["reload-relay-certificate.sh", "scripts/certificate/reload-relay-certificate.sh"],
   ["rels", "packaging/ova/files/rels"],
+  ["alma-relay.cjs", "packaging/alma-relay/alma-relay.cjs"],
+  ["alma-relay.service", "packaging/alma-relay/alma-relay.service"],
+  ["alma-relay.openrc", "packaging/alma-relay/alma-relay.openrc"],
 ]);
 const releaseSums = [...sources.keys()].map(name => `old  ${name}\n`).join("") + "binary-hash  netbird-relay-linux-amd64.tar.gz\n";
 let broken = "";

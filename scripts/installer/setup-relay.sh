@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="${ROOT_DIR:-$(cd "${SCRIPT_DIR}/../.." 2>/dev/null && pwd || printf '%s' "$SCRIPT_DIR")}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/netbird-relay}"
 ENV_FILE="${ENV_FILE:-${CONFIG_DIR}/relay.env}"
 CERT_DIR="${CERT_DIR:-${CONFIG_DIR}/certs}"
@@ -9,6 +11,13 @@ CERT_RELOAD_HOOK="${CERT_RELOAD_HOOK:-/usr/local/libexec/netbird-relay/reload-re
 ACME_HOME="${ACME_HOME:-/root/.acme.sh}"
 SERVICE_USER="${SERVICE_USER:-netbird-relay}"
 SERVICE_GROUP="${SERVICE_GROUP:-netbird-relay}"
+ALMA_RELAY_PATH="${ALMA_RELAY_PATH:-/usr/local/lib/alma-relay/alma-relay.cjs}"
+ALMA_CONFIG_DIR="${ALMA_CONFIG_DIR:-/etc/alma-relay}"
+ALMA_ENV_FILE="${ALMA_ENV_FILE:-${ALMA_CONFIG_DIR}/relay.env}"
+ALMA_SYSTEMD_PATH="${ALMA_SYSTEMD_PATH:-/etc/systemd/system/alma-relay.service}"
+ALMA_OPENRC_PATH="${ALMA_OPENRC_PATH:-/etc/init.d/alma-relay}"
+ALMA_SERVICE_USER="${ALMA_SERVICE_USER:-alma-relay}"
+ALMA_SERVICE_GROUP="${ALMA_SERVICE_GROUP:-alma-relay}"
 RELS_LANG="${RELS_LANG:-en}"
 
 GREEN='\033[0;32m'
@@ -86,6 +95,11 @@ msg() {
       alma_port) printf '%s' "Alma Relay 端口" ;;
       alma_key) printf '%s' "Alma Relay 访问密钥（留空则公开可用）：" ;;
       alma_port_conflict) printf '%s' "Alma Relay 端口不能与 Relay 端口或 STUN 端口相同。" ;;
+      alma_port_min) printf '%s' "Alma Relay 端口必须不小于 1024，因为服务不以 root 身份运行。" ;;
+      alma_node_missing) printf '%s' "未找到 Node.js 运行时（node），无法启动 Alma Relay。请先安装 nodejs。" ;;
+      alma_bundle_missing) printf '未找到 Alma Relay 程序文件：%s' "$1" ;;
+      alma_service_missing) printf '未找到 Alma Relay 服务定义文件：%s' "$1" ;;
+      alma_start_failed) printf '%s' "Alma Relay 服务启动失败，请检查系统日志。" ;;
       summary_alma_ready) printf 'Alma 远程访问中继已就绪：https://%s:%s' "$1" "$2" ;;
       summary_alma_note) printf '%s' "配置说明：在桌面端 Alma 设置 -> 远程访问中填入此地址，手机端即可随时直连。" ;;
       summary_title) printf '%s' "配置完成" ;;
@@ -163,6 +177,11 @@ msg() {
     alma_port) printf '%s' "Alma Relay port" ;;
     alma_key) printf '%s' "Alma Relay registration key (leave empty for public access):" ;;
     alma_port_conflict) printf '%s' "Alma Relay port cannot be the same as Relay port or STUN port." ;;
+    alma_port_min) printf '%s' "Alma Relay port must be 1024 or higher because the service runs without root privileges." ;;
+    alma_node_missing) printf '%s' "Node.js runtime (node) was not found; install nodejs before enabling Alma Relay." ;;
+    alma_bundle_missing) printf 'Alma Relay bundle was not found: %s' "$1" ;;
+    alma_service_missing) printf 'Alma Relay service unit was not found: %s' "$1" ;;
+    alma_start_failed) printf '%s' "Alma Relay service failed to start; check system logs." ;;
     summary_alma_ready) printf 'Alma Remote Access Relay is ready: https://%s:%s' "$1" "$2" ;;
     summary_alma_note) printf '%s' "Instructions: In Alma Desktop -> Settings -> Remote Access, enter this address to connect directly from your phone." ;;
     summary_title) printf '%s' "Setup completed" ;;
@@ -503,43 +522,70 @@ configure_alma_relay() {
   local alma_secret="$2"
   local cert_file="$3"
   local key_file="$4"
-  local config_dir="/etc/alma-relay"
-  local env_file="/etc/alma-relay/relay.env"
+  local config_dir="$ALMA_CONFIG_DIR"
+  local env_file="$ALMA_ENV_FILE"
+  local node_bin=""
 
-  if [[ ! -f /usr/local/lib/alma-relay/alma-relay.cjs && -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.cjs" ]]; then
-    run_as_root mkdir -p /usr/local/lib/alma-relay
-    run_as_root install -m 0755 "${ROOT_DIR}/packaging/alma-relay/alma-relay.cjs" /usr/local/lib/alma-relay/alma-relay.cjs
+  if command -v node >/dev/null 2>&1; then
+    node_bin="$(command -v node)"
+  elif [[ -x /usr/bin/node ]]; then
+    node_bin="/usr/bin/node"
+  else
+    fail "$(msg alma_node_missing)"
   fi
+
+  if [[ ! -f "$ALMA_RELAY_PATH" && -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.cjs" ]]; then
+    run_as_root mkdir -p "$(dirname "$ALMA_RELAY_PATH")"
+    run_as_root install -m 0755 "${ROOT_DIR}/packaging/alma-relay/alma-relay.cjs" "$ALMA_RELAY_PATH"
+  fi
+  [[ -f "$ALMA_RELAY_PATH" ]] || fail "$(msg alma_bundle_missing "$ALMA_RELAY_PATH")"
+
   if command -v systemctl >/dev/null 2>&1; then
-    if [[ ! -f /etc/systemd/system/alma-relay.service && -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.service" ]]; then
-      run_as_root install -m 0644 "${ROOT_DIR}/packaging/alma-relay/alma-relay.service" /etc/systemd/system/alma-relay.service
+    if [[ ! -f "$ALMA_SYSTEMD_PATH" && -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.service" ]]; then
+      run_as_root mkdir -p "$(dirname "$ALMA_SYSTEMD_PATH")"
+      run_as_root install -m 0644 "${ROOT_DIR}/packaging/alma-relay/alma-relay.service" "$ALMA_SYSTEMD_PATH"
+    fi
+    [[ -f "$ALMA_SYSTEMD_PATH" ]] || fail "$(msg alma_service_missing "$ALMA_SYSTEMD_PATH")"
+    if [[ "$node_bin" != "/usr/bin/node" ]]; then
+      run_as_root sed -i "s|^ExecStart=/usr/bin/node |ExecStart=${node_bin} |" "$ALMA_SYSTEMD_PATH"
     fi
   elif command -v rc-update >/dev/null 2>&1; then
-    if [[ ! -x /etc/init.d/alma-relay && -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.openrc" ]]; then
-      run_as_root install -m 0755 "${ROOT_DIR}/packaging/alma-relay/alma-relay.openrc" /etc/init.d/alma-relay
+    if [[ ! -x "$ALMA_OPENRC_PATH" && -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.openrc" ]]; then
+      run_as_root mkdir -p "$(dirname "$ALMA_OPENRC_PATH")"
+      run_as_root install -m 0755 "${ROOT_DIR}/packaging/alma-relay/alma-relay.openrc" "$ALMA_OPENRC_PATH"
     fi
+    [[ -x "$ALMA_OPENRC_PATH" ]] || fail "$(msg alma_service_missing "$ALMA_OPENRC_PATH")"
+    if [[ "$node_bin" != "/usr/bin/node" ]]; then
+      run_as_root sed -i "s|^command=/usr/bin/node$|command=${node_bin}|" "$ALMA_OPENRC_PATH"
+    fi
+  else
+    fail "$(msg service_required)"
   fi
 
-  if ! getent group alma-relay >/dev/null 2>&1; then
+  if ! getent group "$ALMA_SERVICE_GROUP" >/dev/null 2>&1; then
     if command -v groupadd >/dev/null 2>&1; then
-      run_as_root groupadd --system alma-relay || true
+      run_as_root groupadd --system "$ALMA_SERVICE_GROUP"
     elif command -v addgroup >/dev/null 2>&1; then
-      run_as_root addgroup -S alma-relay || true
+      run_as_root addgroup -S "$ALMA_SERVICE_GROUP"
+    else
+      fail "Unable to create service group: ${ALMA_SERVICE_GROUP}"
     fi
   fi
-  if ! id -u alma-relay >/dev/null 2>&1; then
+  if ! id -u "$ALMA_SERVICE_USER" >/dev/null 2>&1; then
     if command -v useradd >/dev/null 2>&1; then
-      run_as_root useradd --system --no-create-home --shell /sbin/nologin -g alma-relay alma-relay || true
+      run_as_root useradd --system --no-create-home --shell /sbin/nologin -g "$ALMA_SERVICE_GROUP" "$ALMA_SERVICE_USER"
     elif command -v adduser >/dev/null 2>&1; then
-      run_as_root adduser -S -D -H -s /sbin/nologin -G alma-relay alma-relay || true
+      run_as_root adduser -S -D -H -s /sbin/nologin -G "$ALMA_SERVICE_GROUP" "$ALMA_SERVICE_USER"
+    else
+      fail "Unable to create service user: ${ALMA_SERVICE_USER}"
     fi
   fi
 
-  if id -u alma-relay >/dev/null 2>&1 && getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
+  if id -u "$ALMA_SERVICE_USER" >/dev/null 2>&1 && getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
     if command -v usermod >/dev/null 2>&1; then
-      run_as_root usermod -a -G "$SERVICE_GROUP" alma-relay || true
+      run_as_root usermod -a -G "$SERVICE_GROUP" "$ALMA_SERVICE_USER"
     elif command -v addgroup >/dev/null 2>&1; then
-      run_as_root addgroup alma-relay "$SERVICE_GROUP" || true
+      run_as_root addgroup "$ALMA_SERVICE_USER" "$SERVICE_GROUP"
     fi
   fi
 
@@ -554,16 +600,21 @@ RELAY_REGISTRATION_KEY=${alma_secret}
 EOF
 
   run_as_root mkdir -p "$config_dir"
-  run_as_root install -m 0600 "$tmp_file" "$env_file"
+  run_as_root install -m 0640 "$tmp_file" "$env_file"
   rm -f "$tmp_file"
+  run_as_root chown -R "${ALMA_SERVICE_USER}:${ALMA_SERVICE_GROUP}" "$config_dir"
+  run_as_root chmod 0750 "$config_dir"
+  run_as_root chmod 0640 "$env_file"
 
-  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files alma-relay.service >/dev/null 2>&1; then
+  if command -v systemctl >/dev/null 2>&1; then
     run_as_root systemctl daemon-reload
-    run_as_root systemctl enable --now alma-relay || true
-    run_as_root systemctl restart alma-relay || true
-  elif command -v rc-update >/dev/null 2>&1 && [[ -x /etc/init.d/alma-relay ]]; then
-    run_as_root rc-update add alma-relay default || true
-    run_as_root service alma-relay restart || true
+    run_as_root systemctl enable --now alma-relay || fail "$(msg alma_start_failed)"
+    run_as_root systemctl restart alma-relay || fail "$(msg alma_start_failed)"
+  elif command -v rc-update >/dev/null 2>&1; then
+    run_as_root rc-update add alma-relay default || fail "$(msg alma_start_failed)"
+    run_as_root service alma-relay restart || fail "$(msg alma_start_failed)"
+  else
+    fail "$(msg service_required)"
   fi
 }
 
@@ -681,7 +732,7 @@ main() {
   restart_service
 
   ALMA_ENABLED=0
-  if [[ -f /usr/local/lib/alma-relay/alma-relay.cjs || -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.cjs" ]]; then
+  if [[ -f "$ALMA_RELAY_PATH" || -f "${ROOT_DIR}/packaging/alma-relay/alma-relay.cjs" ]]; then
     echo
     echo -e "${GREEN}=== $(msg alma_relay_title) ===${NC}"
     local enable_alma
@@ -689,6 +740,7 @@ main() {
     if [[ "$enable_alma" =~ ^[Yy]$ ]]; then
       ALMA_PORT="$(prompt_default "$(msg alma_port) [8787] " '8787')"
       validate_port "$ALMA_PORT" || fail "$(msg invalid_port "$ALMA_PORT")"
+      (( ALMA_PORT >= 1024 )) || fail "$(msg alma_port_min)"
       [[ "$ALMA_PORT" != "$RELAY_PORT" && "$ALMA_PORT" != "$STUN_PORT" ]] || fail "$(msg alma_port_conflict)"
       [[ "$ALMA_PORT" != "9000" && "$ALMA_PORT" != "9090" ]] || fail "$(msg reserved_port)"
       ALMA_KEY="$(read_secret "$(msg alma_key) ")"

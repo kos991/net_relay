@@ -3,6 +3,9 @@ const SOURCE_INSTALL_URL = "https://raw.githubusercontent.com/kos991/net_relay/m
 const SOURCE_SETUP_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/scripts/installer/setup-relay.sh";
 const SOURCE_RELS_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/packaging/ova/files/rels";
 const SOURCE_RELOAD_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/scripts/certificate/reload-relay-certificate.sh";
+const SOURCE_ALMA_BUNDLE_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/packaging/alma-relay/alma-relay.cjs";
+const SOURCE_ALMA_SERVICE_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/packaging/alma-relay/alma-relay.service";
+const SOURCE_ALMA_OPENRC_URL = "https://raw.githubusercontent.com/kos991/net_relay/main/packaging/alma-relay/alma-relay.openrc";
 const RELEASE_ASSETS = new Set([
   "rels",
   "install.sh",
@@ -11,6 +14,9 @@ const RELEASE_ASSETS = new Set([
   "netbird-relay-linux-arm64.tar.gz",
   "setup-relay.sh",
   "reload-relay-certificate.sh",
+  "alma-relay.cjs",
+  "alma-relay.service",
+  "alma-relay.openrc",
 ]);
 
 async function proxyAsset(name, contentDisposition = true) {
@@ -42,7 +48,7 @@ async function proxyAsset(name, contentDisposition = true) {
   });
 }
 
-async function proxySourceScript(sourceUrl, name) {
+async function proxySourceScript(sourceUrl, name, contentType = "text/x-shellscript; charset=utf-8") {
   const upstream = await fetch(sourceUrl, {
     headers: { "user-agent": "net-relay-worker" },
   });
@@ -58,7 +64,7 @@ async function proxySourceScript(sourceUrl, name) {
     status: upstream.status,
     headers: {
       "cache-control": "public, max-age=60",
-      "content-type": "text/x-shellscript; charset=utf-8",
+      "content-type": contentType,
     },
   });
 }
@@ -82,7 +88,16 @@ async function sha256Hex(text) {
 }
 
 async function proxyChecksums() {
-  const [sumsResponse, installResponse, setupResponse, relsResponse, reloadResponse] = await Promise.all([
+  const [
+    sumsResponse,
+    installResponse,
+    setupResponse,
+    relsResponse,
+    reloadResponse,
+    almaBundleResponse,
+    almaServiceResponse,
+    almaOpenrcResponse,
+  ] = await Promise.all([
     fetch(`${RELEASE_BASE}/SHA256SUMS`, {
       headers: { "user-agent": "net-relay-worker" },
     }),
@@ -98,25 +113,60 @@ async function proxyChecksums() {
     fetch(SOURCE_RELOAD_URL, {
       headers: { "user-agent": "net-relay-worker" },
     }),
+    fetch(SOURCE_ALMA_BUNDLE_URL, {
+      headers: { "user-agent": "net-relay-worker" },
+    }),
+    fetch(SOURCE_ALMA_SERVICE_URL, {
+      headers: { "user-agent": "net-relay-worker" },
+    }),
+    fetch(SOURCE_ALMA_OPENRC_URL, {
+      headers: { "user-agent": "net-relay-worker" },
+    }),
   ]);
 
-  if (!sumsResponse.ok || !installResponse.ok || !setupResponse.ok || !relsResponse.ok || !reloadResponse.ok) {
+  if (
+    !sumsResponse.ok ||
+    !installResponse.ok ||
+    !setupResponse.ok ||
+    !relsResponse.ok ||
+    !reloadResponse.ok ||
+    !almaBundleResponse.ok ||
+    !almaServiceResponse.ok ||
+    !almaOpenrcResponse.ok
+  ) {
     return new Response("Failed to fetch checksums\n", {
       status: 502,
       headers: { "content-type": "text/plain; charset=utf-8" },
     });
   }
 
-  const [sumsText, installText, setupText] = await Promise.all([
+  const [
+    sumsText,
+    installText,
+    setupText,
+    relsText,
+    reloadText,
+    almaBundleText,
+    almaServiceText,
+    almaOpenrcText,
+  ] = await Promise.all([
     sumsResponse.text(),
     installResponse.text(),
     setupResponse.text(),
+    relsResponse.text(),
+    reloadResponse.text(),
+    almaBundleResponse.text(),
+    almaServiceResponse.text(),
+    almaOpenrcResponse.text(),
   ]);
   const hashes = new Map([
     ["install.sh", await sha256Hex(installText)],
     ["setup-relay.sh", await sha256Hex(setupText)],
-    ["rels", await sha256Hex(await relsResponse.text())],
-    ["reload-relay-certificate.sh", await sha256Hex(await reloadResponse.text())],
+    ["rels", await sha256Hex(relsText)],
+    ["reload-relay-certificate.sh", await sha256Hex(reloadText)],
+    ["alma-relay.cjs", await sha256Hex(almaBundleText)],
+    ["alma-relay.service", await sha256Hex(almaServiceText)],
+    ["alma-relay.openrc", await sha256Hex(almaOpenrcText)],
   ]);
   const found = new Set();
   let output = sumsText
@@ -178,6 +228,15 @@ export default {
       }
       if (assetName === "reload-relay-certificate.sh") {
         return proxySourceScript(SOURCE_RELOAD_URL, assetName);
+      }
+      if (assetName === "alma-relay.cjs") {
+        return proxySourceScript(SOURCE_ALMA_BUNDLE_URL, assetName, "application/javascript; charset=utf-8");
+      }
+      if (assetName === "alma-relay.service") {
+        return proxySourceScript(SOURCE_ALMA_SERVICE_URL, assetName, "text/plain; charset=utf-8");
+      }
+      if (assetName === "alma-relay.openrc") {
+        return proxySourceScript(SOURCE_ALMA_OPENRC_URL, assetName);
       }
       if (assetName === "SHA256SUMS") {
         return proxyChecksums();
