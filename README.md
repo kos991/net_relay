@@ -1,6 +1,5 @@
 # NetBird & Alma Relay
 
-一行命令装好。不安装 Docker、Compose 或 Caddy。
 
 ```sh
 curl -sSL https://rels.jinfei.org | sh
