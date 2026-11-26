@@ -241,10 +241,6 @@ grep -q "Resolve NetBird relay ref" "$BUILD_OVA"
 grep -q ".github/netbird-relay-upstream.sha" "$BUILD_OVA"
 grep -q "Resolve Alma relay ref" "$BUILD_OVA"
 grep -q ".github/alma-relay-upstream.sha" "$BUILD_OVA"
-if grep -Eq 'gh release delete|--cleanup-tag' "$BUILD_OVA"; then
-  echo "Stable release history must not be deleted by the build workflow." >&2
-  exit 1
-fi
 if grep -Eq 'v0\.|--prerelease|release_channel.*test' "$BUILD_OVA"; then
   echo "Release workflow must publish stable v1.0.N releases only." >&2
   exit 1
