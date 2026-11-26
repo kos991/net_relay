@@ -315,8 +315,14 @@ install_relay_binary() {
   if [[ -f "${binary_tmp_dir}/netbird-relay/VERSION" ]]; then
     run_as_root install -m 0644 -D "${binary_tmp_dir}/netbird-relay/VERSION" "${CONFIG_DIR}/netbird-relay.version"
   fi
-  run_as_root install -m 0644 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.service" /etc/systemd/system/netbird-relay.service
-  run_as_root install -m 0755 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.openrc" /etc/init.d/netbird-relay
+  if command -v systemctl >/dev/null 2>&1; then
+    run_as_root install -m 0644 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.service" /etc/systemd/system/netbird-relay.service
+  elif command -v rc-update >/dev/null 2>&1; then
+    run_as_root install -m 0755 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.openrc" /etc/init.d/netbird-relay
+  else
+    run_as_root install -m 0644 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.service" /etc/systemd/system/netbird-relay.service
+    run_as_root install -m 0755 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.openrc" /etc/init.d/netbird-relay
+  fi
 }
 
 install_installer_asset() (
@@ -357,6 +363,13 @@ install_installer_files() {
   install_installer_asset "$source_dir/reload-relay-certificate.sh" reload-relay-certificate.sh "$CERT_RELOAD_PATH" "$sums_file" 0755
   install_installer_asset "$repo_root/packaging/ova/files/rels" rels "$RELS_PATH" "$sums_file" 0755
   install_installer_asset "$source_file" install.sh "$INSTALL_DIR/install.sh" "$sums_file" 0755
+  if [[ "$RELS_PATH" == "/usr/local/sbin/rels" && -d /usr/local/bin ]]; then
+    run_as_root ln -sf "$RELS_PATH" /usr/local/bin/rels
+  fi
+  if [[ "${RELS_LANG:-}" == "zh" || "${RELS_LANG:-}" == "en" ]]; then
+    printf '%s\n' "$RELS_LANG" | run_as_root tee "${CONFIG_DIR}/lang" >/dev/null
+    run_as_root chmod 0644 "${CONFIG_DIR}/lang"
+  fi
 }
 
 install_alma_relay_files() {
@@ -367,8 +380,30 @@ install_alma_relay_files() {
   repo_root="$(cd "$source_dir/../.." 2>/dev/null && pwd || printf '%s' "$source_dir")"
 
   install_installer_asset "$repo_root/packaging/alma-relay/alma-relay.cjs" alma-relay.cjs "$ALMA_RELAY_PATH" "$sums_file" 0755
-  install_installer_asset "$repo_root/packaging/alma-relay/alma-relay.service" alma-relay.service "$ALMA_SYSTEMD_PATH" "$sums_file" 0644
-  install_installer_asset "$repo_root/packaging/alma-relay/alma-relay.openrc" alma-relay.openrc "$ALMA_OPENRC_PATH" "$sums_file" 0755
+  if command -v systemctl >/dev/null 2>&1; then
+    install_installer_asset "$repo_root/packaging/alma-relay/alma-relay.service" alma-relay.service "$ALMA_SYSTEMD_PATH" "$sums_file" 0644
+  elif command -v rc-update >/dev/null 2>&1; then
+    install_installer_asset "$repo_root/packaging/alma-relay/alma-relay.openrc" alma-relay.openrc "$ALMA_OPENRC_PATH" "$sums_file" 0755
+  else
+    install_installer_asset "$repo_root/packaging/alma-relay/alma-relay.service" alma-relay.service "$ALMA_SYSTEMD_PATH" "$sums_file" 0644
+    install_installer_asset "$repo_root/packaging/alma-relay/alma-relay.openrc" alma-relay.openrc "$ALMA_OPENRC_PATH" "$sums_file" 0755
+  fi
+}
+
+patch_alma_service_node_path() {
+  local node_bin=""
+  if command -v node >/dev/null 2>&1; then
+    node_bin="$(command -v node)"
+  fi
+  if [[ -z "$node_bin" || "$node_bin" == "/usr/bin/node" ]]; then
+    return 0
+  fi
+  if [[ -f "$ALMA_SYSTEMD_PATH" ]]; then
+    run_as_root sed -i "s|^ExecStart=/usr/bin/node |ExecStart=${node_bin} |" "$ALMA_SYSTEMD_PATH"
+  fi
+  if [[ -f "$ALMA_OPENRC_PATH" ]]; then
+    run_as_root sed -i "s|^command=/usr/bin/node$|command=${node_bin}|" "$ALMA_OPENRC_PATH"
+  fi
 }
 
 update_scripts_only() (
@@ -426,6 +461,9 @@ update_scripts_only() (
     committed=$((i+1))
     run_as_root mv -f -- "${stages[i]}/new" "${destinations[i]}"
   done
+  if [[ "$RELS_PATH" == "/usr/local/sbin/rels" && -d /usr/local/bin ]]; then
+    run_as_root ln -sf "$RELS_PATH" /usr/local/bin/rels
+  fi
   complete=1
   log "Scripts updated successfully (including rels); no configuration wizard was started."
 )
@@ -466,6 +504,7 @@ update_alma_only() {
     run_as_root cp -f "$ALMA_RELAY_PATH" "${ALMA_RELAY_PATH}.bak" || true
   fi
   FORCE_UPDATE_SCRIPTS=1 install_alma_relay_files "${tmp_dir}/SHA256SUMS"
+  patch_alma_service_node_path
   restart_if_active alma-relay
   log "$(msg alma_updated "$ALMA_RELAY_PATH")"
 }

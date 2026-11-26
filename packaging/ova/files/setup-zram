@@ -174,12 +174,12 @@ chmod +x /usr/local/bin/zram-optimize.sh
 if [[ "$OS" == "alpine" ]]; then
   mkdir -p /var/spool/cron/crontabs
   if ! crontab -l 2>/dev/null | grep -q "zram-optimize"; then
-    (crontab -l 2>/dev/null; echo "0 3 * * * /usr/local/bin/zram-optimize.sh") | crontab -
+    { crontab -l 2>/dev/null || true; echo "0 3 * * * /usr/local/bin/zram-optimize.sh"; } | crontab -
   fi
   rc-service crond start 2>/dev/null || true
   rc-update add crond default 2>/dev/null || true
 else
-  (crontab -l 2>/dev/null | grep -v "zram-optimize"; echo "0 3 * * * /usr/local/bin/zram-optimize.sh") | crontab -
+  { crontab -l 2>/dev/null | grep -v "zram-optimize" || true; echo "0 3 * * * /usr/local/bin/zram-optimize.sh"; } | crontab -
   systemctl enable --now cron >/dev/null 2>&1 || true
 fi
 

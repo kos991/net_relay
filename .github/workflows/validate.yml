@@ -30,8 +30,10 @@ jobs:
         run: |
           ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].each { |f| YAML.load_file(f); puts "parsed #{f}" }'
 
-      - name: Check release and installer scripts
-        run: bash tests/release-check.sh
+      - name: Check scripts syntax
+        run: |
+          bash -n main.sh scripts/installer/install.sh scripts/installer/setup-relay.sh packaging/ova/files/rels packaging/ova/files/net-relay-firstboot packaging/ova/files/setup-zram
+          node --check worker/rels-worker.js
 
       - name: Check whitespace
         run: git diff --check

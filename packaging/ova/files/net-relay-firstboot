@@ -92,7 +92,7 @@ fi
 
 cd "$INSTALLER_DIR"
 echo "[5/5] Relay 配置向导：正在启动 NetBird Relay 配置。"
-if bash ./setup-relay.sh; then
+if RELS_LANG="${RELS_LANG:-zh}" bash ./setup-relay.sh; then
   mkdir -p "$(dirname "$FLAG")"
   touch "$FLAG"
   echo "首次启动配置完成。再次运行 rels 可打开管理菜单。"

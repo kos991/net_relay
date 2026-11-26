@@ -4,6 +4,7 @@ set -euo pipefail
 RELS_VERSION="${RELS_VERSION:-dev}"
 INSTALLER_DIR="${INSTALLER_DIR:-/opt/netbird-relay-installer}"
 ENV_FILE="${ENV_FILE:-/etc/netbird-relay/relay.env}"
+MGMT_CONFIG_FILE="${MGMT_CONFIG_FILE:-/etc/netbird-relay/management-config.yaml}"
 ALMA_ENV_FILE="${ALMA_ENV_FILE:-/etc/alma-relay/relay.env}"
 LANG_FILE="${LANG_FILE:-/etc/netbird-relay/lang}"
 BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
@@ -118,6 +119,7 @@ msg() {
       nb_opt0) printf '%s' "0) 返回主菜单" ;;
       nb_cfg_title) printf '%s' "==================== NetBird Relay 配置信息 ====================" ;;
       nb_cfg_env) printf '环境文件：%s' "$1" ;;
+      nb_cfg_mgmt_file) printf 'Management 配置文件：%s' "$1" ;;
       nb_cfg_addr) printf '对外地址：%s' "$1" ;;
       nb_cfg_listen) printf '监听地址：%s' "$1" ;;
       nb_cfg_stun) printf 'STUN 地址：%s' "$1" ;;
@@ -145,6 +147,7 @@ msg() {
       alma_opt0) printf '%s' "0) 返回主菜单" ;;
       alma_port_prompt) printf 'Alma Relay 端口 [%s]：' "$1" ;;
       alma_key_prompt) printf '%s' "Alma Relay 访问密钥（留空为公开访问）：" ;;
+      alma_key_keep_prompt) printf '%s' "Alma Relay 访问密钥（直接回车保留当前密钥，输入 - 清除为公开访问）：" ;;
       alma_invalid_port) printf '端口无效：%s（需为 1024-65535 且不能与 NetBird/9000/9090 冲突）' "$1" ;;
       alma_configured) printf 'Alma Relay 配置已更新并启动：%s' "$1" ;;
       alma_started) printf '%s' "Alma Relay 已启动 / 重启。" ;;
@@ -222,6 +225,7 @@ msg() {
     nb_opt0) printf '%s' "0) Back to main menu" ;;
     nb_cfg_title) printf '%s' "==================== NetBird Relay Configuration ====================" ;;
     nb_cfg_env) printf 'Environment file: %s' "$1" ;;
+    nb_cfg_mgmt_file) printf 'Management config file: %s' "$1" ;;
     nb_cfg_addr) printf 'Exposed address: %s' "$1" ;;
     nb_cfg_listen) printf 'Listen address: %s' "$1" ;;
     nb_cfg_stun) printf 'STUN address: %s' "$1" ;;
@@ -249,6 +253,7 @@ msg() {
     alma_opt0) printf '%s' "0) Back to main menu" ;;
     alma_port_prompt) printf 'Alma Relay port [%s]: ' "$1" ;;
     alma_key_prompt) printf '%s' "Alma Relay registration key (leave empty for public access): " ;;
+    alma_key_keep_prompt) printf '%s' "Alma Relay registration key (press Enter to keep current, enter - to clear): " ;;
     alma_invalid_port) printf 'Invalid port: %s (must be 1024-65535 and not conflict with NetBird/9000/9090)' "$1" ;;
     alma_configured) printf 'Alma Relay updated and started: %s' "$1" ;;
     alma_started) printf '%s' "Alma Relay started / restarted." ;;
@@ -537,9 +542,12 @@ show_netbird_config() {
     stun_uri="-"
   fi
 
+  echo "$(msg nb_cfg_title)"
+  echo "$(msg nb_cfg_env "$ENV_FILE")"
+  if [[ -f "$MGMT_CONFIG_FILE" ]]; then
+    echo "$(msg nb_cfg_mgmt_file "$MGMT_CONFIG_FILE")"
+  fi
   cat <<EOF
-$(msg nb_cfg_title)
-$(msg nb_cfg_env "$ENV_FILE")
 $(msg nb_cfg_addr "${exposed:--}")
 $(msg nb_cfg_listen "${listen:--}")
 $(msg nb_cfg_stun "$stun_uri")
@@ -696,8 +704,22 @@ configure_alma_interactive() {
     return 1
   fi
 
-  printf '%s' "$(msg alma_key_prompt)"
-  IFS= read -r new_key || new_key=""
+  local current_key key_input
+  current_key="$(read_env_value "$ALMA_ENV_FILE" "RELAY_REGISTRATION_KEY")"
+  if [[ -n "$current_key" ]]; then
+    printf '%s' "$(msg alma_key_keep_prompt)"
+    IFS= read -r key_input || key_input=""
+    if [[ -z "$key_input" ]]; then
+      new_key="$current_key"
+    elif [[ "$key_input" == "-" ]]; then
+      new_key=""
+    else
+      new_key="$key_input"
+    fi
+  else
+    printf '%s' "$(msg alma_key_prompt)"
+    IFS= read -r new_key || new_key=""
+  fi
 
   (
     RELS_LANG="$RELS_LANG"
@@ -774,6 +796,30 @@ manage_alma_relay() {
   done
 }
 
+parse_cert_epoch() {
+  local raw="$1"
+  local epoch=""
+  if epoch="$(LC_ALL=C date -d "$raw" +%s 2>/dev/null)" && [[ "$epoch" =~ ^[0-9]+$ ]]; then
+    printf '%s' "$epoch"
+    return 0
+  fi
+  if command -v node >/dev/null 2>&1; then
+    epoch="$(node -e 'const t = Date.parse(process.argv[1]); if (!Number.isNaN(t)) process.stdout.write(String(Math.floor(t / 1000)));' "$raw" 2>/dev/null || true)"
+    if [[ "$epoch" =~ ^[0-9]+$ ]]; then
+      printf '%s' "$epoch"
+      return 0
+    fi
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    epoch="$(python3 -c 'import email.utils, sys; dt = email.utils.parsedate_to_datetime(sys.argv[1]); print(int(dt.timestamp()))' "$raw" 2>/dev/null || true)"
+    if [[ "$epoch" =~ ^[0-9]+$ ]]; then
+      printf '%s' "$epoch"
+      return 0
+    fi
+  fi
+  return 1
+}
+
 show_certificate_status() {
   load_env_file
 
@@ -788,7 +834,7 @@ show_certificate_status() {
   if [[ -s "$relay_cert" ]]; then
     not_before="$(openssl x509 -in "$relay_cert" -noout -startdate | cut -d= -f2-)"
     not_after="$(openssl x509 -in "$relay_cert" -noout -enddate | cut -d= -f2-)"
-    if end_epoch="$(date -d "$not_after" +%s 2>/dev/null)"; then
+    if end_epoch="$(parse_cert_epoch "$not_after")"; then
       now_epoch="$(date +%s)"
       remaining_days="$(( (end_epoch - now_epoch) / 86400 ))"
     fi
@@ -799,8 +845,13 @@ show_certificate_status() {
     fi
   fi
 
-  if [[ -x "${HOME}/.acme.sh/acme.sh" ]]; then
-    if crontab -l 2>/dev/null | grep -q ".acme.sh"; then
+  local has_acme=0
+  if command -v acme.sh >/dev/null 2>&1 || [[ -x /root/.acme.sh/acme.sh || -x "${HOME}/.acme.sh/acme.sh" ]]; then
+    has_acme=1
+  fi
+  if [[ "$has_acme" == "1" ]]; then
+    if crontab -l 2>/dev/null | grep -Eq '(^|[^[:alnum:]_])acme\.sh([^[:alnum:]_]|$)|\.acme\.sh' \
+      || grep -Rqs 'acme\.sh' /etc/cron.d /etc/periodic /var/spool/cron/crontabs 2>/dev/null; then
       renewal_status="$(msg acme_cron_ok)"
     else
       renewal_status="$(msg acme_cron_missing)"
