@@ -58,6 +58,7 @@ msg() {
       updating_netbird) printf '%s' "正在原地更新 NetBird Relay 程序（保留现有配置）..." ;;
       updating_alma) printf '%s' "正在原地更新 Alma Relay 程序（保留现有配置）..." ;;
       updating_scripts) printf '%s' "正在下载并更新最新管理脚本..." ;;
+      reloading_rels) printf '%s' "管理脚本已更新，正在重新加载新版菜单..." ;;
       no_service_mgr) printf '%s' "未检测到 systemd 或 OpenRC。" ;;
       nb_status_hdr) printf '%s' "=== NetBird Relay 状态 ===" ;;
       alma_status_hdr) printf '%s' "=== Alma Relay 状态 ===" ;;
@@ -161,6 +162,7 @@ msg() {
     updating_netbird) printf '%s' "Updating NetBird Relay binary in place (keeping existing config)..." ;;
     updating_alma) printf '%s' "Updating Alma Relay in place (keeping existing config)..." ;;
     updating_scripts) printf '%s' "Downloading and updating latest management scripts..." ;;
+    reloading_rels) printf '%s' "Management scripts updated, reloading menu..." ;;
     no_service_mgr) printf '%s' "systemd or OpenRC was not found." ;;
     nb_status_hdr) printf '%s' "=== NetBird Relay Status ===" ;;
     alma_status_hdr) printf '%s' "=== Alma Relay Status ===" ;;
@@ -455,6 +457,19 @@ update_scripts() {
   cd "$INSTALLER_DIR"
   echo "$(msg updating_scripts)"
   RELS_LANG="$RELS_LANG" FORCE_UPDATE_SCRIPTS=1 bash ./install.sh --scripts-only
+}
+
+reload_self() {
+  local self_bin="${BASH_SOURCE[0]:-$0}"
+  if [[ ! -r "$self_bin" ]]; then
+    self_bin="$(command -v rels 2>/dev/null || printf '/usr/local/sbin/rels')"
+  fi
+  echo "$(msg reloading_rels)"
+  if [[ -x "$self_bin" ]]; then
+    exec env -u RELS_VERSION RELS_LANG="$RELS_LANG" "$self_bin" "$@"
+  elif [[ -r "$self_bin" ]]; then
+    exec env -u RELS_VERSION RELS_LANG="$RELS_LANG" bash "$self_bin" "$@"
+  fi
 }
 
 start_restart_netbird() {
@@ -862,7 +877,13 @@ main() {
       1) manage_netbird_relay; continue ;;
       2) manage_alma_relay; continue ;;
       3) run_install ;;
-      4) update_scripts ;;
+      4)
+        if update_scripts; then
+          printf '\n%s' "$(msg press_enter)"
+          IFS= read -r _ || true
+          reload_self "$@"
+        fi
+        ;;
       5) show_certificate_status ;;
       6) show_system_optimization_status ;;
       l|L) toggle_language; continue ;;
