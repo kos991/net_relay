@@ -62,6 +62,8 @@ msg() {
       missing_binary) printf '%s' "安装包缺少 netbird-relay 二进制文件。" ;;
       binary_installed) printf 'netbird-relay 二进制已安装：%s' "$1" ;;
       binary_wizard) printf '%s' "启动二进制配置向导。" ;;
+      netbird_updated) printf 'NetBird Relay 程序已更新（保留现有配置）：%s' "$1" ;;
+      alma_updated) printf 'Alma Relay 程序已更新（保留现有配置）：%s' "$1" ;;
     esac
     return 0
   fi
@@ -82,6 +84,8 @@ msg() {
     missing_binary) printf '%s' "Package is missing the netbird-relay binary." ;;
     binary_installed) printf 'netbird-relay binary installed: %s' "$1" ;;
     binary_wizard) printf '%s' "Starting binary setup wizard." ;;
+    netbird_updated) printf 'NetBird Relay binary updated (existing config kept): %s' "$1" ;;
+    alma_updated) printf 'Alma Relay updated (existing config kept): %s' "$1" ;;
   esac
 }
 
@@ -423,12 +427,62 @@ update_scripts_only() (
   log "Scripts updated successfully (including rels); no configuration wizard was started."
 )
 
+restart_if_active() {
+  local svc="$1"
+  if command -v systemctl >/dev/null 2>&1; then
+    run_as_root systemctl daemon-reload >/dev/null 2>&1 || true
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+      run_as_root systemctl restart "$svc"
+    fi
+  elif command -v service >/dev/null 2>&1; then
+    if service "$svc" status >/dev/null 2>&1; then
+      run_as_root service "$svc" restart
+    fi
+  fi
+}
+
+update_netbird_only() {
+  local arch tmp_dir package_file
+  arch="$(detect_arch)"
+  tmp_dir="$(mktemp -d)"
+  trap "rm -rf -- '$tmp_dir'" RETURN
+
+  package_file="$(download_relay_package "$arch" "$tmp_dir")"
+  install_relay_binary "$package_file"
+  restart_if_active netbird-relay
+  log "$(msg netbird_updated "$BIN_PATH")"
+}
+
+update_alma_only() {
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap "rm -rf -- '$tmp_dir'" RETURN
+
+  download_file "${RELEASE_BASE}/SHA256SUMS" "${tmp_dir}/SHA256SUMS"
+  if [[ -f "$ALMA_RELAY_PATH" ]]; then
+    run_as_root cp -f "$ALMA_RELAY_PATH" "${ALMA_RELAY_PATH}.bak" || true
+  fi
+  FORCE_UPDATE_SCRIPTS=1 install_alma_relay_files "${tmp_dir}/SHA256SUMS"
+  restart_if_active alma-relay
+  log "$(msg alma_updated "$ALMA_RELAY_PATH")"
+}
+
 main() {
   local scripts_only=0
+  local update_netbird=0
+  local update_alma=0
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --scripts-only|--update-scripts-only)
         scripts_only=1
+        shift
+        ;;
+      --update-netbird|--update-binary)
+        update_netbird=1
+        shift
+        ;;
+      --update-alma)
+        update_alma=1
         shift
         ;;
       --binary)
@@ -443,7 +497,7 @@ main() {
     esac
   done
 
-  if [[ "$scripts_only" == "1" ]]; then
+  if [[ "$scripts_only" == "1" || "$update_netbird" == "1" || "$update_alma" == "1" ]]; then
     RELS_LANG="${RELS_LANG:-en}"
   else
     select_language
@@ -452,6 +506,16 @@ main() {
 
   if [[ "$scripts_only" == "1" ]]; then
     update_scripts_only
+    return 0
+  fi
+
+  if [[ "$update_netbird" == "1" ]]; then
+    update_netbird_only
+    return 0
+  fi
+
+  if [[ "$update_alma" == "1" ]]; then
+    update_alma_only
     return 0
   fi
 

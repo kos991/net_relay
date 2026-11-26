@@ -52,91 +52,111 @@ msg() {
     case "$key" in
       err_prefix) printf '错误：%s' "$1" ;;
       missing_installer_dir) printf '未找到安装目录：%s' "$1" ;;
-      updating_binary) printf '%s' "正在下载并更新最新 NetBird Relay 程序..." ;;
+      updating_netbird) printf '%s' "正在原地更新 NetBird Relay 程序（保留现有配置）..." ;;
+      updating_alma) printf '%s' "正在原地更新 Alma Relay 程序（保留现有配置）..." ;;
       updating_scripts) printf '%s' "正在下载并更新最新管理脚本..." ;;
       no_service_mgr) printf '%s' "未检测到 systemd 或 OpenRC。" ;;
       nb_status_hdr) printf '%s' "=== NetBird Relay 状态 ===" ;;
       alma_status_hdr) printf '%s' "=== Alma Relay 状态 ===" ;;
-      log_target_prompt) printf '%s' "请选择日志目标：1) NetBird Relay  2) Alma Relay [1]：" ;;
-      no_backup) printf '未找到上一版本备份（%s）。' "$1" ;;
-      rolling_back) printf '%s' "正在回滚到上一版本 NetBird Relay..." ;;
-      rollback_done) printf '%s' "回滚完成并已重启服务。" ;;
-      restarted) printf '%s' "服务已重启。" ;;
+      nb_started) printf '%s' "NetBird Relay 已启动 / 重启。" ;;
+      nb_stopped) printf '%s' "NetBird Relay 已停止。" ;;
+      nb_not_installed_hint) printf '%s' "NetBird Relay 尚未安装或配置，请先运行配置向导。" ;;
+      no_backup) printf '未找到上一版本的二进制备份（%s）。' "$1" ;;
+      rolling_back) printf '%s' "正在回滚到上一版本 netbird-relay..." ;;
+      rollback_done) printf '%s' "回滚完成，NetBird Relay 已重启。" ;;
+      yes) printf '%s' "是" ;;
+      no) printf '%s' "否" ;;
+      unknown) printf '%s' "未知" ;;
+      acme_missing) printf '%s' "未检测到 acme.sh" ;;
+      acme_cron_ok) printf '%s' "已配置 acme.sh 定时续期" ;;
+      acme_cron_missing) printf '%s' "已安装 acme.sh，但未检测到定时续期任务" ;;
       cert_title) printf '%s' "==================== TLS 证书状态 ====================" ;;
       cert_file) printf 'Relay 证书文件：%s' "$1" ;;
       key_file) printf 'Relay 私钥文件：%s' "$1" ;;
       cert_from) printf '证书生效时间：%s' "$1" ;;
-      cert_until) printf '证书到期时间：%s' "$1" ;;
+      cert_until) printf '证书过期时间：%s' "$1" ;;
       cert_days) printf '剩余有效天数：%s' "$1" ;;
-      cert_soon) printf '30 天内是否到期：%s' "$1" ;;
+      cert_soon) printf '30 天内即将过期：%s' "$1" ;;
       cert_renewal) printf '自动续期状态：%s' "$1" ;;
-      yes) printf '%s' "是" ;;
-      no) printf '%s' "否" ;;
-      unknown) printf '%s' "未知" ;;
-      acme_none) printf '%s' "未检测到 acme.sh" ;;
-      acme_cron_ok) printf '%s' "已配置 acme.sh 定时续期" ;;
-      acme_cron_missing) printf '%s' "已安装 acme.sh，但未检测到定时续期任务" ;;
-      sys_title) printf '%s' "==================== ZRAM 与内核优化状态 ====================" ;;
-      zram_none) printf '%s' "未检测到 zramctl 输出" ;;
-      swap_none) printf '%s' "未检测到 swap 输出" ;;
+      sys_title) printf '%s' "==================== 系统优化状态 ====================" ;;
+      zram_missing) printf '%s' "未检测到 zramctl 输出" ;;
+      swap_missing) printf '%s' "未检测到 swap 输出" ;;
+      state_running) printf '%s' "运行中" ;;
+      state_stopped) printf '%s' "已停止" ;;
+      state_not_installed) printf '%s' "未安装" ;;
       menu_title) printf '%s' "NetBird & Alma Relay 管理菜单" ;;
-      m1) printf '%s' "1) 安装或重新配置 Relay（NetBird + Alma）" ;;
-      m2) printf '%s' "2) 更新 Relay 程序（保留现有配置）" ;;
-      m3) printf '%s' "3) 更新管理脚本（rels / install / setup）" ;;
-      m4) printf '%s' "4) 查看服务状态（NetBird + Alma）" ;;
-      m5) printf '%s' "5) 查看实时日志（NetBird / Alma）" ;;
-      m6) printf '%s' "6) 重启服务（NetBird + Alma）" ;;
-      m7) printf '%s' "7) Alma Relay 管理（配置 / 启停 / 访问地址）" ;;
-      m8) printf '%s' "8) 查看 TLS 证书状态" ;;
-      m9) printf '%s' "9) 查看 ZRAM 与内核优化状态" ;;
-      m10) printf '%s' "10) 回滚 NetBird Relay 到上一版本" ;;
-      ml) printf '%s' "L) 切换语言 (Switch to English)" ;;
-      m0) printf '%s' "0) 退出" ;;
+      main_opt1) printf '%s' "1) NetBird Relay 管理（状态 / 日志 / 启停 / 更新 / 回滚 / 配置）" ;;
+      main_opt2) printf '%s' "2) Alma Relay 管理   （状态 / 日志 / 启停 / 配置 / 更新）" ;;
+      main_opt3) printf '%s' "3) 一键完整安装 / 重新初始化向导（NetBird + Alma）" ;;
+      main_opt4) printf '%s' "4) 更新管理脚本（rels / install / setup）" ;;
+      main_opt5) printf '%s' "5) 查看 TLS 证书状态" ;;
+      main_opt6) printf '%s' "6) 查看 ZRAM 与内核优化状态" ;;
+      main_opt_lang) printf '%s' "L) 切换语言 (Switch to English)" ;;
+      main_opt0) printf '%s' "0) 退出" ;;
       select_opt) printf '%s' "请选择操作：" ;;
       invalid_opt) printf '无效选项：%s' "$1" ;;
       press_enter) printf '%s' "按回车键继续..." ;;
+      nb_menu_title) printf '%s' "NetBird Relay 管理" ;;
+      nb_info_status) printf '服务状态：%s' "$1" ;;
+      nb_info_addr) printf '对外地址：%s' "$1" ;;
+      nb_info_stun) printf 'STUN 端口：%s' "$1" ;;
+      nb_opt1) printf '%s' "1) 查看详细服务状态" ;;
+      nb_opt2) printf '%s' "2) 查看实时日志" ;;
+      nb_opt3) printf '%s' "3) 启动 / 重启 NetBird Relay" ;;
+      nb_opt4) printf '%s' "4) 停止 NetBird Relay" ;;
+      nb_opt5) printf '%s' "5) 更新 NetBird Relay 程序（保留配置，不重装）" ;;
+      nb_opt6) printf '%s' "6) 回滚 NetBird Relay 到上一版本" ;;
+      nb_opt7) printf '%s' "7) 重新配置 NetBird Relay（运行配置向导）" ;;
+      nb_opt0) printf '%s' "0) 返回主菜单" ;;
       alma_menu_title) printf '%s' "Alma Relay 管理" ;;
-      alma_state_running) printf '%s' "运行中" ;;
-      alma_state_stopped) printf '%s' "已停止" ;;
-      alma_state_not_installed) printf '%s' "未安装 / 未配置" ;;
       alma_access_open) printf '%s' "公开访问（未设置密钥）" ;;
       alma_access_key) printf '%s' "密钥保护（已设置访问密钥）" ;;
       alma_info_status) printf '服务状态：%s' "$1" ;;
       alma_info_port) printf '监听端口：%s' "$1" ;;
       alma_info_access) printf '访问模式：%s' "$1" ;;
       alma_info_url) printf '访问地址：%s' "$1" ;;
-      alma_opt1) printf '%s' "1) 配置 / 修改端口与访问密钥（立即生效）" ;;
-      alma_opt2) printf '%s' "2) 启动 / 重启 Alma Relay" ;;
-      alma_opt3) printf '%s' "3) 停止并禁用 Alma Relay" ;;
-      alma_opt4) printf '%s' "4) 查看 Alma Relay 实时日志" ;;
+      alma_opt1) printf '%s' "1) 查看详细服务状态" ;;
+      alma_opt2) printf '%s' "2) 查看实时日志" ;;
+      alma_opt3) printf '%s' "3) 启动 / 重启 Alma Relay" ;;
+      alma_opt4) printf '%s' "4) 停止并禁用 Alma Relay" ;;
+      alma_opt5) printf '%s' "5) 配置 / 修改端口与访问密钥（立即生效）" ;;
+      alma_opt6) printf '%s' "6) 更新 Alma Relay 程序（保留配置，不重装）" ;;
       alma_opt0) printf '%s' "0) 返回主菜单" ;;
       alma_port_prompt) printf 'Alma Relay 端口 [%s]：' "$1" ;;
       alma_key_prompt) printf '%s' "Alma Relay 访问密钥（留空为公开访问）：" ;;
-      alma_invalid_port) printf '无效端口：%s（需为 1024-65535，且不能与 NetBird/9000/9090 冲突）' "$1" ;;
-      alma_configured) printf 'Alma Relay 已更新并启动，访问地址：%s' "$1" ;;
+      alma_invalid_port) printf '端口无效：%s（需为 1024-65535 且不能与 NetBird/9000/9090 冲突）' "$1" ;;
+      alma_configured) printf 'Alma Relay 配置已更新并启动：%s' "$1" ;;
       alma_started) printf '%s' "Alma Relay 已启动 / 重启。" ;;
-      alma_stopped) printf '%s' "Alma Relay 已停止并禁用开机自启。" ;;
-      alma_not_installed_hint) printf '%s' "尚未安装 Alma Relay 服务，请先选 1 完成配置或更新管理脚本。" ;;
-      alma_need_nb_cert) printf '未找到 TLS 证书（%s），请先在主菜单选 1 完成 NetBird Relay 配置。' "$1" ;;
-      alma_setup_missing) printf '缺少 %s，请先在主菜单选 3 更新管理脚本。' "$1" ;;
+      alma_stopped) printf '%s' "Alma Relay 已停止并禁用。" ;;
+      alma_not_installed_hint) printf '%s' "Alma Relay 尚未配置，请先选 5 进行配置。" ;;
+      alma_need_nb_cert) printf '未找到 TLS 证书（%s），请先在主菜单选 3 完成 NetBird Relay 证书配置。' "$1" ;;
+      alma_setup_missing) printf '未找到 %s，请先在主菜单选 4 更新管理脚本。' "$1" ;;
     esac
     return 0
   fi
 
   case "$key" in
-    err_prefix) printf 'Error: %s' "$1" ;;
-    missing_installer_dir) printf 'installer directory is missing: %s' "$1" ;;
-    updating_binary) printf '%s' "Downloading and installing the latest netbird-relay binary..." ;;
-    updating_scripts) printf '%s' "Downloading and installing the latest installer scripts..." ;;
+    err_prefix) printf 'ERROR: %s' "$1" ;;
+    missing_installer_dir) printf 'Installer directory not found: %s' "$1" ;;
+    updating_netbird) printf '%s' "Updating NetBird Relay binary in place (keeping existing config)..." ;;
+    updating_alma) printf '%s' "Updating Alma Relay in place (keeping existing config)..." ;;
+    updating_scripts) printf '%s' "Downloading and updating latest management scripts..." ;;
     no_service_mgr) printf '%s' "systemd or OpenRC was not found." ;;
     nb_status_hdr) printf '%s' "=== NetBird Relay Status ===" ;;
     alma_status_hdr) printf '%s' "=== Alma Relay Status ===" ;;
-    log_target_prompt) printf '%s' "Log target: 1) NetBird Relay  2) Alma Relay [1]: " ;;
+    nb_started) printf '%s' "NetBird Relay started / restarted." ;;
+    nb_stopped) printf '%s' "NetBird Relay stopped." ;;
+    nb_not_installed_hint) printf '%s' "NetBird Relay is not installed yet. Run the setup wizard first." ;;
     no_backup) printf 'No previous binary backup found (%s).' "$1" ;;
     rolling_back) printf '%s' "Rolling back to previous netbird-relay binary..." ;;
-    rollback_done) printf '%s' "Rollback completed and service restarted." ;;
-    restarted) printf '%s' "Services restarted." ;;
-    cert_title) printf '%s' "==================== Certificate Status ====================" ;;
+    rollback_done) printf '%s' "Rollback completed and NetBird Relay restarted." ;;
+    yes) printf '%s' "yes" ;;
+    no) printf '%s' "no" ;;
+    unknown) printf '%s' "unknown" ;;
+    acme_missing) printf '%s' "acme.sh not detected" ;;
+    acme_cron_ok) printf '%s' "acme.sh cron renewal is configured" ;;
+    acme_cron_missing) printf '%s' "acme.sh is installed, but cron renewal was not detected" ;;
+    cert_title) printf '%s' "==================== TLS Certificate Status ====================" ;;
     cert_file) printf 'Relay certificate file: %s' "$1" ;;
     key_file) printf 'Relay private key file: %s' "$1" ;;
     cert_from) printf 'Certificate valid from: %s' "$1" ;;
@@ -144,45 +164,49 @@ msg() {
     cert_days) printf 'Remaining days: %s' "$1" ;;
     cert_soon) printf 'Expires within 30 days: %s' "$1" ;;
     cert_renewal) printf 'Certificate renewal: %s' "$1" ;;
-    yes) printf '%s' "yes" ;;
-    no) printf '%s' "no" ;;
-    unknown) printf '%s' "unknown" ;;
-    acme_none) printf '%s' "acme.sh not detected" ;;
-    acme_cron_ok) printf '%s' "acme.sh cron renewal is configured" ;;
-    acme_cron_missing) printf '%s' "acme.sh is installed, but cron renewal was not detected" ;;
     sys_title) printf '%s' "==================== System Optimization Status ====================" ;;
-    zram_none) printf '%s' "zramctl output was not detected" ;;
-    swap_none) printf '%s' "swap output was not detected" ;;
+    zram_missing) printf '%s' "zramctl output was not detected" ;;
+    swap_missing) printf '%s' "swap output was not detected" ;;
+    state_running) printf '%s' "Running" ;;
+    state_stopped) printf '%s' "Stopped" ;;
+    state_not_installed) printf '%s' "Not installed" ;;
     menu_title) printf '%s' "NetBird & Alma Relay Management Menu" ;;
-    m1) printf '%s' "1) Install or reconfigure Relay (NetBird + Alma)" ;;
-    m2) printf '%s' "2) Update Relay binary (keeps config)" ;;
-    m3) printf '%s' "3) Update management scripts (rels/install/setup)" ;;
-    m4) printf '%s' "4) Show service status (NetBird + Alma)" ;;
-    m5) printf '%s' "5) Show service logs (NetBird / Alma)" ;;
-    m6) printf '%s' "6) Restart Relay service (NetBird + Alma)" ;;
-    m7) printf '%s' "7) Manage Alma Relay (config / start-stop / URL)" ;;
-    m8) printf '%s' "8) Show certificate status" ;;
-    m9) printf '%s' "9) Show ZRAM and kernel tuning status" ;;
-    m10) printf '%s' "10) Rollback NetBird Relay to previous backup" ;;
-    ml) printf '%s' "L) Switch language (切换为中文)" ;;
-    m0) printf '%s' "0) Exit" ;;
+    main_opt1) printf '%s' "1) NetBird Relay (status / logs / start-stop / update / rollback / config)" ;;
+    main_opt2) printf '%s' "2) Alma Relay    (status / logs / start-stop / config / update)" ;;
+    main_opt3) printf '%s' "3) Full install / re-initialize wizard (NetBird + Alma)" ;;
+    main_opt4) printf '%s' "4) Update management scripts (rels / install / setup)" ;;
+    main_opt5) printf '%s' "5) Show TLS certificate status" ;;
+    main_opt6) printf '%s' "6) Show ZRAM and kernel tuning status" ;;
+    main_opt_lang) printf '%s' "L) Switch language (切换到中文)" ;;
+    main_opt0) printf '%s' "0) Exit" ;;
     select_opt) printf '%s' "Select an option: " ;;
     invalid_opt) printf 'Invalid option: %s' "$1" ;;
     press_enter) printf '%s' "Press Enter to continue..." ;;
+    nb_menu_title) printf '%s' "NetBird Relay Management" ;;
+    nb_info_status) printf 'Service status: %s' "$1" ;;
+    nb_info_addr) printf 'Exposed address: %s' "$1" ;;
+    nb_info_stun) printf 'STUN port: %s' "$1" ;;
+    nb_opt1) printf '%s' "1) Show detailed service status" ;;
+    nb_opt2) printf '%s' "2) Show service logs (real-time)" ;;
+    nb_opt3) printf '%s' "3) Start / restart NetBird Relay" ;;
+    nb_opt4) printf '%s' "4) Stop NetBird Relay" ;;
+    nb_opt5) printf '%s' "5) Update NetBird Relay binary (keeps config, no reinstall)" ;;
+    nb_opt6) printf '%s' "6) Rollback NetBird Relay to previous backup" ;;
+    nb_opt7) printf '%s' "7) Reconfigure NetBird Relay (run setup wizard)" ;;
+    nb_opt0) printf '%s' "0) Back to main menu" ;;
     alma_menu_title) printf '%s' "Alma Relay Management" ;;
-    alma_state_running) printf '%s' "running" ;;
-    alma_state_stopped) printf '%s' "stopped" ;;
-    alma_state_not_installed) printf '%s' "not installed / not configured" ;;
-    alma_access_open) printf '%s' "open (no registration key)" ;;
-    alma_access_key) printf '%s' "protected (registration key set)" ;;
+    alma_access_open) printf '%s' "Public (no registration key)" ;;
+    alma_access_key) printf '%s' "Protected (registration key set)" ;;
     alma_info_status) printf 'Service status: %s' "$1" ;;
     alma_info_port) printf 'Listen port: %s' "$1" ;;
     alma_info_access) printf 'Access mode: %s' "$1" ;;
     alma_info_url) printf 'Relay URL: %s' "$1" ;;
-    alma_opt1) printf '%s' "1) Configure / update port and access key" ;;
-    alma_opt2) printf '%s' "2) Start / restart Alma Relay" ;;
-    alma_opt3) printf '%s' "3) Stop and disable Alma Relay" ;;
-    alma_opt4) printf '%s' "4) Show Alma Relay logs (real-time)" ;;
+    alma_opt1) printf '%s' "1) Show detailed service status" ;;
+    alma_opt2) printf '%s' "2) Show service logs (real-time)" ;;
+    alma_opt3) printf '%s' "3) Start / restart Alma Relay" ;;
+    alma_opt4) printf '%s' "4) Stop and disable Alma Relay" ;;
+    alma_opt5) printf '%s' "5) Configure / update port and access key" ;;
+    alma_opt6) printf '%s' "6) Update Alma Relay (keeps config, no reinstall)" ;;
     alma_opt0) printf '%s' "0) Back to main menu" ;;
     alma_port_prompt) printf 'Alma Relay port [%s]: ' "$1" ;;
     alma_key_prompt) printf '%s' "Alma Relay registration key (leave empty for public access): " ;;
@@ -190,9 +214,9 @@ msg() {
     alma_configured) printf 'Alma Relay updated and started: %s' "$1" ;;
     alma_started) printf '%s' "Alma Relay started / restarted." ;;
     alma_stopped) printf '%s' "Alma Relay stopped and disabled." ;;
-    alma_not_installed_hint) printf '%s' "Alma Relay is not installed yet. Use option 1 to configure it or update scripts first." ;;
-    alma_need_nb_cert) printf 'TLS certificate not found (%s). Run option 1 in the main menu to configure NetBird Relay first.' "$1" ;;
-    alma_setup_missing) printf 'Missing %s. Run option 3 in the main menu to update management scripts first.' "$1" ;;
+    alma_not_installed_hint) printf '%s' "Alma Relay is not configured yet. Use option 5 to configure it first." ;;
+    alma_need_nb_cert) printf 'TLS certificate not found (%s). Run option 3 in the main menu to configure NetBird Relay first.' "$1" ;;
+    alma_setup_missing) printf 'Missing %s. Run option 4 in the main menu to update management scripts first.' "$1" ;;
   esac
 }
 
@@ -205,24 +229,40 @@ require_installer_dir() {
   [[ -d "$INSTALLER_DIR" ]] || fail "$(msg missing_installer_dir "$INSTALLER_DIR")"
 }
 
-run_install() {
-  require_installer_dir
-  cd "$INSTALLER_DIR"
-  RELS_LANG="$RELS_LANG" bash ./setup-relay.sh
+read_env_value() {
+  local file="$1"
+  local key="$2"
+  [[ -r "$file" ]] || return 0
+  awk -F= -v k="$key" '$1 == k { sub(/^[^=]*=/, ""); print; exit }' "$file" 2>/dev/null || true
 }
 
-update_binary() {
-  require_installer_dir
-  cd "$INSTALLER_DIR"
-  echo "$(msg updating_binary)"
-  RELS_LANG="$RELS_LANG" bash ./install.sh
+load_env_file() {
+  if [[ -f "$ENV_FILE" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    set +a
+  fi
 }
 
-update_scripts() {
-  require_installer_dir
-  cd "$INSTALLER_DIR"
-  echo "$(msg updating_scripts)"
-  RELS_LANG="$RELS_LANG" FORCE_UPDATE_SCRIPTS=1 bash ./install.sh --scripts-only
+has_netbird_service() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl list-unit-files netbird-relay.service 2>/dev/null | grep -q 'netbird-relay.service' && return 0
+    [[ -f /etc/systemd/system/netbird-relay.service ]] && return 0
+  elif [[ -x /etc/init.d/netbird-relay ]]; then
+    return 0
+  fi
+  return 1
+}
+
+is_netbird_running() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl is-active --quiet netbird-relay 2>/dev/null
+  elif command -v service >/dev/null 2>&1; then
+    service netbird-relay status >/dev/null 2>&1
+  else
+    return 1
+  fi
 }
 
 has_alma_service() {
@@ -245,98 +285,13 @@ is_alma_running() {
   fi
 }
 
-show_status() {
-  echo "$(msg nb_status_hdr)"
-  if command -v systemctl >/dev/null 2>&1; then
-    systemctl status netbird-relay --no-pager || true
-    if has_alma_service; then
-      echo
-      echo "$(msg alma_status_hdr)"
-      systemctl status alma-relay --no-pager || true
-    fi
-  elif command -v service >/dev/null 2>&1; then
-    service netbird-relay status || true
-    if has_alma_service; then
-      echo
-      echo "$(msg alma_status_hdr)"
-      service alma-relay status || true
-    fi
-  else
-    fail "$(msg no_service_mgr)"
-  fi
-}
-
-follow_service_logs() {
-  local target="$1"
-  if command -v journalctl >/dev/null 2>&1; then
-    journalctl -u "$target" -f -n 120
-  else
-    tail -f "/var/log/${target}.log" "/var/log/${target}.err"
-  fi
-}
-
-show_logs() {
-  local target="netbird-relay"
-  if has_alma_service; then
-    printf '%s' "$(msg log_target_prompt)"
-    local log_choice=""
-    IFS= read -r log_choice || log_choice=""
-    if [[ "$log_choice" == "2" ]]; then
-      target="alma-relay"
-    fi
-  fi
-  follow_service_logs "$target"
-}
-
-restart_service() {
-  if command -v systemctl >/dev/null 2>&1; then
-    systemctl restart netbird-relay
-    if systemctl is-active --quiet alma-relay 2>/dev/null; then
-      systemctl restart alma-relay
-    fi
-  elif command -v service >/dev/null 2>&1; then
-    service netbird-relay restart
-    if service alma-relay status >/dev/null 2>&1; then
-      service alma-relay restart
-    fi
-  else
-    fail "$(msg no_service_mgr)"
-  fi
-  echo "$(msg restarted)"
-}
-
-rollback_binary() {
-  local bak_path="/usr/local/bin/netbird-relay.bak"
-  if [[ ! -f "$bak_path" ]]; then
-    echo "$(msg no_backup "$bak_path")"
-    return 1
-  fi
-  echo "$(msg rolling_back)"
-  cp -f "$bak_path" "$BIN_PATH"
-  chmod 0755 "$BIN_PATH"
-  restart_service
-  echo "$(msg rollback_done)"
-}
-
-load_env_file() {
-  if [[ -f "$ENV_FILE" ]]; then
-    set -a
-    # shellcheck disable=SC1090
-    . "$ENV_FILE"
-    set +a
-  fi
-}
-
-read_env_value() {
-  local file="$1"
-  local key="$2"
-  [[ -r "$file" ]] || return 0
-  awk -F= -v k="$key" '$1 == k { sub(/^[^=]*=/, ""); print; exit }' "$file" 2>/dev/null || true
+get_relay_exposed() {
+  read_env_value "$ENV_FILE" "NB_EXPOSED_ADDRESS"
 }
 
 get_relay_domain() {
   local exposed
-  exposed="$(read_env_value "$ENV_FILE" "NB_EXPOSED_ADDRESS")"
+  exposed="$(get_relay_exposed)"
   exposed="${exposed#rels://}"
   exposed="${exposed#rel://}"
   printf '%s' "${exposed%%:*}"
@@ -354,35 +309,200 @@ get_stun_port() {
   printf '%s' "${stun%%,*}"
 }
 
-print_alma_status_block() {
-  local state_label port access_label domain url_label key_val
-  if is_alma_running; then
-    state_label="$(msg alma_state_running)"
-  elif has_alma_service && [[ -f "$ALMA_ENV_FILE" ]]; then
-    state_label="$(msg alma_state_stopped)"
+get_netbird_state_label() {
+  if is_netbird_running; then
+    msg state_running
+  elif has_netbird_service || [[ -x "$BIN_PATH" ]]; then
+    msg state_stopped
   else
-    state_label="$(msg alma_state_not_installed)"
+    msg state_not_installed
   fi
+}
 
+get_alma_state_label() {
+  if is_alma_running; then
+    msg state_running
+  elif has_alma_service && [[ -f "$ALMA_ENV_FILE" ]]; then
+    msg state_stopped
+  else
+    msg state_not_installed
+  fi
+}
+
+get_alma_url_label() {
+  local port domain
+  port="$(read_env_value "$ALMA_ENV_FILE" "PORT")"
+  if [[ -z "$port" ]]; then
+    printf '%s' "-"
+    return 0
+  fi
+  domain="$(get_relay_domain)"
+  if [[ -n "$domain" ]]; then
+    printf 'https://%s:%s' "$domain" "$port"
+  else
+    printf 'https://<domain>:%s' "$port"
+  fi
+}
+
+follow_service_logs() {
+  local target="$1"
+  if command -v journalctl >/dev/null 2>&1; then
+    journalctl -u "$target" -f -n 120
+  else
+    tail -f "/var/log/${target}.log" "/var/log/${target}.err"
+  fi
+}
+
+show_service_status() {
+  local target="$1"
+  local header="$2"
+  echo "$header"
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl status "$target" --no-pager || true
+  elif command -v service >/dev/null 2>&1; then
+    service "$target" status || true
+  else
+    fail "$(msg no_service_mgr)"
+  fi
+}
+
+run_install() {
+  require_installer_dir
+  cd "$INSTALLER_DIR"
+  RELS_LANG="$RELS_LANG" bash ./setup-relay.sh
+}
+
+update_netbird_binary() {
+  require_installer_dir
+  cd "$INSTALLER_DIR"
+  echo "$(msg updating_netbird)"
+  RELS_LANG="$RELS_LANG" bash ./install.sh --update-netbird
+}
+
+update_alma_binary() {
+  require_installer_dir
+  cd "$INSTALLER_DIR"
+  echo "$(msg updating_alma)"
+  RELS_LANG="$RELS_LANG" bash ./install.sh --update-alma
+}
+
+update_scripts() {
+  require_installer_dir
+  cd "$INSTALLER_DIR"
+  echo "$(msg updating_scripts)"
+  RELS_LANG="$RELS_LANG" FORCE_UPDATE_SCRIPTS=1 bash ./install.sh --scripts-only
+}
+
+start_restart_netbird() {
+  if ! has_netbird_service; then
+    echo "$(msg nb_not_installed_hint)"
+    return 1
+  fi
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable netbird-relay >/dev/null 2>&1 || true
+    systemctl restart netbird-relay
+  elif command -v service >/dev/null 2>&1; then
+    rc-update add netbird-relay default >/dev/null 2>&1 || true
+    service netbird-relay restart
+  else
+    fail "$(msg no_service_mgr)"
+  fi
+  echo "$(msg nb_started)"
+}
+
+stop_netbird() {
+  if ! has_netbird_service; then
+    echo "$(msg nb_not_installed_hint)"
+    return 1
+  fi
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl stop netbird-relay || true
+  elif command -v service >/dev/null 2>&1; then
+    service netbird-relay stop || true
+  else
+    fail "$(msg no_service_mgr)"
+  fi
+  echo "$(msg nb_stopped)"
+}
+
+rollback_netbird_binary() {
+  local bak_path="${BIN_PATH}.bak"
+  if [[ ! -f "$bak_path" ]]; then
+    echo "$(msg no_backup "$bak_path")"
+    return 1
+  fi
+  echo "$(msg rolling_back)"
+  cp -f "$bak_path" "$BIN_PATH"
+  chmod 0755 "$BIN_PATH"
+  start_restart_netbird >/dev/null
+  echo "$(msg rollback_done)"
+}
+
+print_netbird_status_block() {
+  local state_label exposed stun
+  state_label="$(get_netbird_state_label)"
+  exposed="$(get_relay_exposed)"
+  exposed="${exposed:--}"
+  stun="$(get_stun_port)"
+  stun="${stun:--}"
+
+  cat <<EOF
+=================================================
+                $(msg nb_menu_title)
+=================================================
+$(msg nb_info_status "$state_label")
+$(msg nb_info_addr "$exposed")
+$(msg nb_info_stun "$stun")
+-------------------------------------------------
+$(msg nb_opt1)
+$(msg nb_opt2)
+$(msg nb_opt3)
+$(msg nb_opt4)
+$(msg nb_opt5)
+$(msg nb_opt6)
+$(msg nb_opt7)
+$(msg nb_opt0)
+=================================================
+EOF
+}
+
+manage_netbird_relay() {
+  local sub_choice=""
+  while true; do
+    clear || true
+    print_netbird_status_block
+    printf '%s' "$(msg select_opt)"
+    IFS= read -r sub_choice || sub_choice="0"
+    case "$sub_choice" in
+      1) show_service_status netbird-relay "$(msg nb_status_hdr)" ;;
+      2) follow_service_logs netbird-relay ;;
+      3) start_restart_netbird || true ;;
+      4) stop_netbird || true ;;
+      5) update_netbird_binary || true ;;
+      6) rollback_netbird_binary || true ;;
+      7) run_install || true ;;
+      0) return 0 ;;
+      *) echo "$(msg invalid_opt "$sub_choice")" ;;
+    esac
+    printf '\n%s' "$(msg press_enter)"
+    IFS= read -r _ || true
+  done
+}
+
+print_alma_status_block() {
+  local state_label port access_label url_label key_val
+  state_label="$(get_alma_state_label)"
   port="$(read_env_value "$ALMA_ENV_FILE" "PORT")"
   key_val="$(read_env_value "$ALMA_ENV_FILE" "RELAY_REGISTRATION_KEY")"
-  domain="$(get_relay_domain)"
+  url_label="$(get_alma_url_label)"
 
   if [[ -z "$port" ]]; then
     port="-"
     access_label="-"
-    url_label="-"
+  elif [[ -n "$key_val" ]]; then
+    access_label="$(msg alma_access_key)"
   else
-    if [[ -n "$key_val" ]]; then
-      access_label="$(msg alma_access_key)"
-    else
-      access_label="$(msg alma_access_open)"
-    fi
-    if [[ -n "$domain" ]]; then
-      url_label="https://${domain}:${port}"
-    else
-      url_label="https://<domain>:${port}"
-    fi
+    access_label="$(msg alma_access_open)"
   fi
 
   cat <<EOF
@@ -398,6 +518,8 @@ $(msg alma_opt1)
 $(msg alma_opt2)
 $(msg alma_opt3)
 $(msg alma_opt4)
+$(msg alma_opt5)
+$(msg alma_opt6)
 $(msg alma_opt0)
 =================================================
 EOF
@@ -459,7 +581,7 @@ start_restart_alma() {
     return 1
   fi
   if command -v systemctl >/dev/null 2>&1; then
-    systemctl enable --now alma-relay
+    systemctl enable alma-relay >/dev/null 2>&1 || true
     systemctl restart alma-relay
   elif command -v service >/dev/null 2>&1; then
     rc-update add alma-relay default >/dev/null 2>&1 || true
@@ -476,7 +598,7 @@ stop_disable_alma() {
     return 1
   fi
   if command -v systemctl >/dev/null 2>&1; then
-    systemctl disable --now alma-relay || true
+    systemctl disable --now alma-relay >/dev/null 2>&1 || systemctl stop alma-relay || true
   elif command -v service >/dev/null 2>&1; then
     service alma-relay stop || true
     rc-update del alma-relay default >/dev/null 2>&1 || true
@@ -487,25 +609,21 @@ stop_disable_alma() {
 }
 
 manage_alma_relay() {
-  local sub=""
+  local sub_choice=""
   while true; do
     clear || true
     print_alma_status_block
     printf '%s' "$(msg select_opt)"
-    IFS= read -r sub || sub="0"
-    case "$sub" in
-      1) configure_alma_interactive || true ;;
-      2) start_restart_alma || true ;;
-      3) stop_disable_alma || true ;;
-      4)
-        if has_alma_service; then
-          follow_service_logs "alma-relay"
-        else
-          echo "$(msg alma_not_installed_hint)"
-        fi
-        ;;
+    IFS= read -r sub_choice || sub_choice="0"
+    case "$sub_choice" in
+      1) show_service_status alma-relay "$(msg alma_status_hdr)" ;;
+      2) follow_service_logs alma-relay ;;
+      3) start_restart_alma || true ;;
+      4) stop_disable_alma || true ;;
+      5) configure_alma_interactive || true ;;
+      6) update_alma_binary || true ;;
       0) return 0 ;;
-      *) echo "$(msg invalid_opt "$sub")" ;;
+      *) echo "$(msg invalid_opt "$sub_choice")" ;;
     esac
     printf '\n%s' "$(msg press_enter)"
     IFS= read -r _ || true
@@ -520,10 +638,8 @@ show_certificate_status() {
   local not_before="-"
   local not_after="-"
   local remaining_days="-"
-  local expires_soon
-  local renewal_status
-  expires_soon="$(msg unknown)"
-  renewal_status="$(msg acme_none)"
+  local expires_soon="$(msg unknown)"
+  local renewal_status="$(msg acme_missing)"
 
   if [[ -s "$relay_cert" ]]; then
     not_before="$(openssl x509 -in "$relay_cert" -noout -startdate | cut -d= -f2-)"
@@ -563,10 +679,10 @@ show_system_optimization_status() {
   cat <<EOF
 $(msg sys_title)
 ZRAM:
-$(zramctl 2>/dev/null || msg zram_none)
+$(zramctl 2>/dev/null || msg zram_missing)
 
 Swap:
-$(swapon --show 2>/dev/null || msg swap_none)
+$(swapon --show 2>/dev/null || msg swap_missing)
 
 Kernel:
 swappiness=$(sysctl -n vm.swappiness 2>/dev/null || msg unknown)
@@ -580,23 +696,29 @@ EOF
 }
 
 print_menu() {
+  local nb_state nb_addr alma_state alma_url
+  nb_state="$(get_netbird_state_label)"
+  nb_addr="$(get_relay_exposed)"
+  nb_addr="${nb_addr:--}"
+  alma_state="$(get_alma_state_label)"
+  alma_url="$(get_alma_url_label)"
+
   clear || true
   cat <<EOF
 =================================================
          $(msg menu_title)
 =================================================
-$(msg m1)
-$(msg m2)
-$(msg m3)
-$(msg m4)
-$(msg m5)
-$(msg m6)
-$(msg m7)
-$(msg m8)
-$(msg m9)
-$(msg m10)
-$(msg ml)
-$(msg m0)
+NetBird Relay : ${nb_state}  (${nb_addr})
+Alma Relay    : ${alma_state}  (${alma_url})
+-------------------------------------------------
+$(msg main_opt1)
+$(msg main_opt2)
+$(msg main_opt3)
+$(msg main_opt4)
+$(msg main_opt5)
+$(msg main_opt6)
+$(msg main_opt_lang)
+$(msg main_opt0)
 =================================================
 EOF
 }
@@ -606,18 +728,14 @@ main() {
   while true; do
     print_menu
     printf '%s' "$(msg select_opt)"
-    IFS= read -r choice || exit 0
+    IFS= read -r choice || choice="0"
     case "$choice" in
-      1) run_install ;;
-      2) update_binary ;;
-      3) update_scripts ;;
-      4) show_status ;;
-      5) show_logs ;;
-      6) restart_service ;;
-      7) manage_alma_relay; continue ;;
-      8) show_certificate_status ;;
-      9) show_system_optimization_status ;;
-      10) rollback_binary ;;
+      1) manage_netbird_relay; continue ;;
+      2) manage_alma_relay; continue ;;
+      3) run_install ;;
+      4) update_scripts ;;
+      5) show_certificate_status ;;
+      6) show_system_optimization_status ;;
       l|L) toggle_language; continue ;;
       0) exit 0 ;;
       *) echo "$(msg invalid_opt "$choice")" ;;
