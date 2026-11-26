@@ -61,12 +61,10 @@ jobs:
           changed=false
           if [ "$latest_tag" != "$current_tag" ]; then
             changed=true
-            printf '%s\n' "$latest_tag" > .github/netbird-relay-upstream.sha
           fi
 
           if [ "$latest_alma_tag" != "$current_alma_tag" ]; then
             changed=true
-            printf '%s\n' "$latest_alma_tag" > .github/alma-relay-upstream.sha
           fi
 
           {
@@ -75,15 +73,6 @@ jobs:
             echo "changed=${changed}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Save upstream tag marker
-        if: steps.upstream.outputs.changed == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/netbird-relay-upstream.sha .github/alma-relay-upstream.sha
-          git commit -m "Track NetBird relay ${{ steps.upstream.outputs.latest_tag }} & Alma relay ${{ steps.upstream.outputs.latest_alma_tag }}"
-          git push origin HEAD:main
-
       - name: Trigger OVA release build
         if: steps.upstream.outputs.changed == 'true'
         id: build
@@ -91,6 +80,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           head_sha="$(git rev-parse HEAD)"
+          dispatch_ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           gh workflow run build-ova \
             --ref main \
             -f netbird_relay_ref="${{ steps.upstream.outputs.latest_tag }}" \
@@ -103,7 +93,7 @@ jobs:
               --event workflow_dispatch \
               --limit 20 \
               --json databaseId,headSha,createdAt \
-              --jq "map(select(.headSha == \"${head_sha}\")) | sort_by(.createdAt) | last | .databaseId")"
+              --jq "map(select(.headSha == \"${head_sha}\" and .createdAt >= \"${dispatch_ts}\")) | sort_by(.createdAt) | last | .databaseId")"
             if [ -n "${build_run_id}" ] && [ "${build_run_id}" != "null" ]; then
               break
             fi
@@ -117,6 +107,21 @@ jobs:
 
           echo "Watching OVA build run ${build_run_id}"
           gh run watch "${build_run_id}" --exit-status
+
+      - name: Save upstream tag marker
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          git pull --rebase origin main
+          mkdir -p .github
+          printf '%s\n' "${{ steps.upstream.outputs.latest_tag }}" > .github/netbird-relay-upstream.sha
+          printf '%s\n' "${{ steps.upstream.outputs.latest_alma_tag }}" > .github/alma-relay-upstream.sha
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/netbird-relay-upstream.sha .github/alma-relay-upstream.sha
+          if ! git diff --cached --quiet; then
+            git commit -m "Track NetBird relay ${{ steps.upstream.outputs.latest_tag }} & Alma relay ${{ steps.upstream.outputs.latest_alma_tag }}"
+            git push origin HEAD:main
+          fi
 
       - name: Remove older stable releases
         if: steps.upstream.outputs.changed == 'true'

@@ -13,7 +13,7 @@ on:
       netbird_relay_ref:
         description: "NetBird upstream ref/tag/branch to build relay from"
         required: false
-        default: "main"
+        default: ""
       alma_relay_ref:
         description: "Alma Relay upstream ref/tag/branch to build from"
         required: false
@@ -325,6 +325,7 @@ jobs:
       - name: Write release notes
         env:
           GH_TOKEN: ${{ github.token }}
+          SSH_PORT: ${{ steps.meta.outputs.ssh_port }}
         run: |
           tag="${{ steps.meta.outputs.release_tag }}"
 
