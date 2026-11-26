@@ -66,7 +66,25 @@ grep -Fq 'install_alma_relay_files' "$INSTALL"
 grep -Fq 'ALMA_RELAY_PATH' "$SETUP"
 grep -Fq 'SOURCE_ALMA_BUNDLE_URL' "$WORKER"
 grep -Fq -- '--scripts-only' "$RELS"
-grep -Fq '8) Show ZRAM and kernel tuning status' "$RELS"
+grep -Fq 'Show ZRAM and kernel tuning status' "$RELS"
+rels_zh_menu="$(RELS_LANG=zh bash -c 'clear() { :; }; source "$1"; init_language; print_menu' _ "$RELS")"
+grep -Fq 'NetBird & Alma Relay 管理菜单' <<<"$rels_zh_menu"
+grep -Fq '7) Alma Relay 管理（配置 / 启停 / 访问地址）' <<<"$rels_zh_menu"
+rels_en_menu="$(RELS_LANG=en bash -c 'clear() { :; }; source "$1"; init_language; print_menu' _ "$RELS")"
+grep -Fq 'NetBird & Alma Relay Management Menu' <<<"$rels_en_menu"
+grep -Fq '7) Manage Alma Relay (config / start-stop / URL)' <<<"$rels_en_menu"
+rels_alma_tmp="$(mktemp -d)"
+printf 'NB_EXPOSED_ADDRESS=rels://resh.example.com:8443\n' > "${rels_alma_tmp}/nb.env"
+printf 'PORT=8787\nRELAY_REGISTRATION_KEY=secret123\n' > "${rels_alma_tmp}/alma.env"
+rels_alma_menu="$(RELS_LANG=zh ENV_FILE="${rels_alma_tmp}/nb.env" ALMA_ENV_FILE="${rels_alma_tmp}/alma.env" bash -c 'is_alma_running() { return 0; }; has_alma_service() { return 0; }; source "$1"; init_language; print_alma_status_block' _ "$RELS")"
+grep -Fq '访问地址：https://resh.example.com:8787' <<<"$rels_alma_menu"
+grep -Fq '密钥保护（已设置访问密钥）' <<<"$rels_alma_menu"
+if grep -Fq 'secret123' <<<"$rels_alma_menu"; then
+  echo "Alma Relay menu must not print registration key in plaintext." >&2
+  rm -rf "$rels_alma_tmp"
+  exit 1
+fi
+rm -rf "$rels_alma_tmp"
 
 OPENRC_TEST_ENV="$(mktemp)"
 printf 'NB_AUTH_SECRET=test-secret=\n' > "$OPENRC_TEST_ENV"
@@ -467,8 +485,8 @@ if grep -q "Relay auth secret: \${RELAY_AUTH_SECRET}" "$SETUP"; then
 fi
 
 if LC_ALL=C.UTF-8 grep -R -n "[一-龥]" \
-  "$RELS" "$LOCALE_PROFILE"; then
-  echo "OVA utility scripts must remain ASCII/English only." >&2
+  "$LOCALE_PROFILE"; then
+  echo "Locale profile script must remain ASCII/English only." >&2
   exit 1
 fi
 

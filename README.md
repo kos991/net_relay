@@ -11,18 +11,20 @@ curl -sSL https://rels.jinfei.org | sh
 
 ```text
 =================================================
-              NetBird Relay Management Menu
+         NetBird & Alma Relay 管理菜单
 =================================================
-1) Install or reconfigure Relay
-2) Update Relay binary (keeps config)
-3) Update management scripts (rels/install/setup)
-4) Show service status
-5) Show service logs (real-time)
-6) Restart Relay service
-7) Show certificate status
-8) Show ZRAM and kernel tuning status
-9) Rollback Relay binary to previous backup
-0) Exit
+1) 安装或重新配置 Relay（NetBird + Alma）
+2) 更新 Relay 程序（保留现有配置）
+3) 更新管理脚本（rels / install / setup）
+4) 查看服务状态（NetBird + Alma）
+5) 查看实时日志（NetBird / Alma）
+6) 重启服务（NetBird + Alma）
+7) Alma Relay 管理（配置 / 启停 / 访问地址）
+8) 查看 TLS 证书状态
+9) 查看 ZRAM 与内核优化状态
+10) 回滚 NetBird Relay 到上一版本
+L) 切换语言 (Switch to English)
+0) 退出
 =================================================
 ```
 
