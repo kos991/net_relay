@@ -436,8 +436,7 @@ configure_alma_interactive() {
   fi
 
   printf '%s' "$(msg alma_key_prompt)"
-  IFS= read -r -s new_key || new_key=""
-  echo
+  IFS= read -r new_key || new_key=""
 
   (
     RELS_LANG="$RELS_LANG"

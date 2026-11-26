@@ -747,7 +747,7 @@ main() {
       (( ALMA_PORT >= 1024 )) || fail "$(msg alma_port_min)"
       [[ "$ALMA_PORT" != "$RELAY_PORT" && "$ALMA_PORT" != "$STUN_PORT" ]] || fail "$(msg alma_port_conflict)"
       [[ "$ALMA_PORT" != "9000" && "$ALMA_PORT" != "9090" ]] || fail "$(msg reserved_port)"
-      ALMA_KEY="$(read_secret "$(msg alma_key) ")"
+      ALMA_KEY="$(read_input "$(msg alma_key) ")"
       configure_alma_relay "$ALMA_PORT" "$ALMA_KEY" "$TLS_CERT_FILE" "$TLS_KEY_FILE"
       ALMA_ENABLED=1
     fi
