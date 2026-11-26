@@ -13,8 +13,8 @@ curl -sSL https://rels.jinfei.org | sh
 =================================================
          NetBird & Alma Relay 管理菜单
 =================================================
-NetBird Relay : 运行中  (rels://example.com:8443)
-Alma Relay    : 运行中  (https://example.com:8787)
+NetBird Relay : 运行中  v0.83.2  (rels://example.com:8443)
+Alma Relay    : 运行中  v1.4.0  (https://example.com:8787)
 -------------------------------------------------
 1) NetBird Relay 管理（状态 / 日志 / 启停 / 更新 / 回滚 / 配置）
 2) Alma Relay 管理   （状态 / 日志 / 启停 / 配置 / 更新）

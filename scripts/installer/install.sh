@@ -312,6 +312,9 @@ install_relay_binary() {
   fi
 
   run_as_root install -m 0755 -D "${binary_tmp_dir}/netbird-relay/bin/netbird-relay" "$BIN_PATH"
+  if [[ -f "${binary_tmp_dir}/netbird-relay/VERSION" ]]; then
+    run_as_root install -m 0644 -D "${binary_tmp_dir}/netbird-relay/VERSION" "${CONFIG_DIR}/netbird-relay.version"
+  fi
   run_as_root install -m 0644 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.service" /etc/systemd/system/netbird-relay.service
   run_as_root install -m 0755 -D "${binary_tmp_dir}/netbird-relay/services/netbird-relay.openrc" /etc/init.d/netbird-relay
 }

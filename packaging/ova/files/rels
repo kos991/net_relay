@@ -6,6 +6,8 @@ ENV_FILE="${ENV_FILE:-/etc/netbird-relay/relay.env}"
 ALMA_ENV_FILE="${ALMA_ENV_FILE:-/etc/alma-relay/relay.env}"
 LANG_FILE="${LANG_FILE:-/etc/netbird-relay/lang}"
 BIN_PATH="${BIN_PATH:-/usr/local/bin/netbird-relay}"
+NB_VERSION_FILE="${NB_VERSION_FILE:-/etc/netbird-relay/netbird-relay.version}"
+ALMA_RELAY_PATH="${ALMA_RELAY_PATH:-/usr/local/lib/alma-relay/alma-relay.cjs}"
 RELS_LANG="${RELS_LANG:-}"
 
 init_language() {
@@ -98,6 +100,7 @@ msg() {
       press_enter) printf '%s' "按回车键继续..." ;;
       nb_menu_title) printf '%s' "NetBird Relay 管理" ;;
       nb_info_status) printf '服务状态：%s' "$1" ;;
+      nb_info_version) printf '当前版本：%s' "$1" ;;
       nb_info_addr) printf '对外地址：%s' "$1" ;;
       nb_info_stun) printf 'STUN 端口：%s' "$1" ;;
       nb_opt1) printf '%s' "1) 查看详细服务状态" ;;
@@ -112,6 +115,7 @@ msg() {
       alma_access_open) printf '%s' "公开访问（未设置密钥）" ;;
       alma_access_key) printf '%s' "密钥保护（已设置访问密钥）" ;;
       alma_info_status) printf '服务状态：%s' "$1" ;;
+      alma_info_version) printf '当前版本：%s' "$1" ;;
       alma_info_port) printf '监听端口：%s' "$1" ;;
       alma_info_access) printf '访问模式：%s' "$1" ;;
       alma_info_url) printf '访问地址：%s' "$1" ;;
@@ -184,6 +188,7 @@ msg() {
     press_enter) printf '%s' "Press Enter to continue..." ;;
     nb_menu_title) printf '%s' "NetBird Relay Management" ;;
     nb_info_status) printf 'Service status: %s' "$1" ;;
+    nb_info_version) printf 'Version: %s' "$1" ;;
     nb_info_addr) printf 'Exposed address: %s' "$1" ;;
     nb_info_stun) printf 'STUN port: %s' "$1" ;;
     nb_opt1) printf '%s' "1) Show detailed service status" ;;
@@ -198,6 +203,7 @@ msg() {
     alma_access_open) printf '%s' "Public (no registration key)" ;;
     alma_access_key) printf '%s' "Protected (registration key set)" ;;
     alma_info_status) printf 'Service status: %s' "$1" ;;
+    alma_info_version) printf 'Version: %s' "$1" ;;
     alma_info_port) printf 'Listen port: %s' "$1" ;;
     alma_info_access) printf 'Access mode: %s' "$1" ;;
     alma_info_url) printf 'Relay URL: %s' "$1" ;;
@@ -329,6 +335,33 @@ get_alma_state_label() {
   fi
 }
 
+get_netbird_version() {
+  local ver=""
+  if [[ -r "$BIN_PATH" ]]; then
+    if command -v strings >/dev/null 2>&1; then
+      ver="$({ strings "$BIN_PATH" 2>/dev/null || true; } | grep -Fm1 $'github.com/netbirdio/netbird\tv' | awk '{print $3}' || true)"
+    fi
+    if [[ -z "$ver" ]]; then
+      ver="$(LC_ALL=C grep -aFm1 $'github.com/netbirdio/netbird\tv' "$BIN_PATH" 2>/dev/null | sed -n 's/.*github\.com\/netbirdio\/netbird[[:space:]]*\(v[0-9][0-9.]*[^[:space:]]*\).*/\1/p' | head -n 1 || true)"
+    fi
+  fi
+  if [[ -z "$ver" && -r "$NB_VERSION_FILE" ]]; then
+    ver="$(read_env_value "$NB_VERSION_FILE" "NETBIRD_RELAY_REF")"
+  fi
+  printf '%s' "${ver:--}"
+}
+
+get_alma_version() {
+  local ver=""
+  if [[ -r "$ALMA_RELAY_PATH" ]]; then
+    ver="$(sed -n 's/.*VERSION = "\([^"]*\)".*/\1/p' "$ALMA_RELAY_PATH" 2>/dev/null | head -n 1 || true)"
+  fi
+  if [[ -n "$ver" && "$ver" != v* ]]; then
+    ver="v${ver}"
+  fi
+  printf '%s' "${ver:--}"
+}
+
 get_alma_url_label() {
   local port domain
   port="$(read_env_value "$ALMA_ENV_FILE" "PORT")"
@@ -439,8 +472,9 @@ rollback_netbird_binary() {
 }
 
 print_netbird_status_block() {
-  local state_label exposed stun
+  local state_label ver exposed stun
   state_label="$(get_netbird_state_label)"
+  ver="$(get_netbird_version)"
   exposed="$(get_relay_exposed)"
   exposed="${exposed:--}"
   stun="$(get_stun_port)"
@@ -451,6 +485,7 @@ print_netbird_status_block() {
                 $(msg nb_menu_title)
 =================================================
 $(msg nb_info_status "$state_label")
+$(msg nb_info_version "$ver")
 $(msg nb_info_addr "$exposed")
 $(msg nb_info_stun "$stun")
 -------------------------------------------------
@@ -490,8 +525,9 @@ manage_netbird_relay() {
 }
 
 print_alma_status_block() {
-  local state_label port access_label url_label key_val
+  local state_label ver port access_label url_label key_val
   state_label="$(get_alma_state_label)"
+  ver="$(get_alma_version)"
   port="$(read_env_value "$ALMA_ENV_FILE" "PORT")"
   key_val="$(read_env_value "$ALMA_ENV_FILE" "RELAY_REGISTRATION_KEY")"
   url_label="$(get_alma_url_label)"
@@ -510,6 +546,7 @@ print_alma_status_block() {
                 $(msg alma_menu_title)
 =================================================
 $(msg alma_info_status "$state_label")
+$(msg alma_info_version "$ver")
 $(msg alma_info_port "$port")
 $(msg alma_info_access "$access_label")
 $(msg alma_info_url "$url_label")
@@ -696,11 +733,13 @@ EOF
 }
 
 print_menu() {
-  local nb_state nb_addr alma_state alma_url
+  local nb_state nb_ver nb_addr alma_state alma_ver alma_url
   nb_state="$(get_netbird_state_label)"
+  nb_ver="$(get_netbird_version)"
   nb_addr="$(get_relay_exposed)"
   nb_addr="${nb_addr:--}"
   alma_state="$(get_alma_state_label)"
+  alma_ver="$(get_alma_version)"
   alma_url="$(get_alma_url_label)"
 
   clear || true
@@ -708,8 +747,8 @@ print_menu() {
 =================================================
          $(msg menu_title)
 =================================================
-NetBird Relay : ${nb_state}  (${nb_addr})
-Alma Relay    : ${alma_state}  (${alma_url})
+NetBird Relay : ${nb_state}  ${nb_ver}  (${nb_addr})
+Alma Relay    : ${alma_state}  ${alma_ver}  (${alma_url})
 -------------------------------------------------
 $(msg main_opt1)
 $(msg main_opt2)
