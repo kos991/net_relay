@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+RELS_VERSION="${RELS_VERSION:-dev}"
 INSTALLER_DIR="${INSTALLER_DIR:-/opt/netbird-relay-installer}"
 ENV_FILE="${ENV_FILE:-/etc/netbird-relay/relay.env}"
 ALMA_ENV_FILE="${ALMA_ENV_FILE:-/etc/alma-relay/relay.env}"
@@ -87,6 +88,7 @@ msg() {
       state_stopped) printf '%s' "已停止" ;;
       state_not_installed) printf '%s' "未安装" ;;
       menu_title) printf '%s' "NetBird & Alma Relay 管理菜单" ;;
+      menu_script_ver) printf '管理脚本      : %s' "$1" ;;
       main_opt1) printf '%s' "1) NetBird Relay 管理（状态 / 日志 / 启停 / 更新 / 回滚 / 配置）" ;;
       main_opt2) printf '%s' "2) Alma Relay 管理   （状态 / 日志 / 启停 / 配置 / 更新）" ;;
       main_opt3) printf '%s' "3) 一键完整安装 / 重新初始化向导（NetBird + Alma）" ;;
@@ -103,6 +105,7 @@ msg() {
       nb_info_version) printf '当前版本：%s' "$1" ;;
       nb_info_addr) printf '对外地址：%s' "$1" ;;
       nb_info_stun) printf 'STUN 端口：%s' "$1" ;;
+      nb_info_secret) printf '认证密钥：%s' "$1" ;;
       nb_opt1) printf '%s' "1) 查看详细服务状态" ;;
       nb_opt2) printf '%s' "2) 查看实时日志" ;;
       nb_opt3) printf '%s' "3) 启动 / 重启 NetBird Relay" ;;
@@ -110,7 +113,18 @@ msg() {
       nb_opt5) printf '%s' "5) 更新 NetBird Relay 程序（保留配置，不重装）" ;;
       nb_opt6) printf '%s' "6) 回滚 NetBird Relay 到上一版本" ;;
       nb_opt7) printf '%s' "7) 重新配置 NetBird Relay（运行配置向导）" ;;
+      nb_opt8) printf '%s' "8) 查看 NetBird 配置信息（含密钥与 Management 配置）" ;;
       nb_opt0) printf '%s' "0) 返回主菜单" ;;
+      nb_cfg_title) printf '%s' "==================== NetBird Relay 配置信息 ====================" ;;
+      nb_cfg_env) printf '环境文件：%s' "$1" ;;
+      nb_cfg_addr) printf '对外地址：%s' "$1" ;;
+      nb_cfg_listen) printf '监听地址：%s' "$1" ;;
+      nb_cfg_stun) printf 'STUN 地址：%s' "$1" ;;
+      nb_cfg_secret) printf '认证密钥：%s' "$1" ;;
+      nb_cfg_cert) printf 'TLS 证书：%s' "$1" ;;
+      nb_cfg_key) printf 'TLS 私钥：%s' "$1" ;;
+      nb_cfg_mgmt) printf '%s' "合并到 NetBird Management 的 config.yaml：" ;;
+      nb_cfg_extra) printf '%s' "如果这是附加节点，请追加：" ;;
       alma_menu_title) printf '%s' "Alma Relay 管理" ;;
       alma_access_open) printf '%s' "公开访问（未设置密钥）" ;;
       alma_access_key) printf '%s' "密钥保护（已设置访问密钥）" ;;
@@ -177,6 +191,7 @@ msg() {
     state_stopped) printf '%s' "Stopped" ;;
     state_not_installed) printf '%s' "Not installed" ;;
     menu_title) printf '%s' "NetBird & Alma Relay Management Menu" ;;
+    menu_script_ver) printf 'Script        : %s' "$1" ;;
     main_opt1) printf '%s' "1) NetBird Relay (status / logs / start-stop / update / rollback / config)" ;;
     main_opt2) printf '%s' "2) Alma Relay    (status / logs / start-stop / config / update)" ;;
     main_opt3) printf '%s' "3) Full install / re-initialize wizard (NetBird + Alma)" ;;
@@ -193,6 +208,7 @@ msg() {
     nb_info_version) printf 'Version: %s' "$1" ;;
     nb_info_addr) printf 'Exposed address: %s' "$1" ;;
     nb_info_stun) printf 'STUN port: %s' "$1" ;;
+    nb_info_secret) printf 'Auth secret: %s' "$1" ;;
     nb_opt1) printf '%s' "1) Show detailed service status" ;;
     nb_opt2) printf '%s' "2) Show service logs (real-time)" ;;
     nb_opt3) printf '%s' "3) Start / restart NetBird Relay" ;;
@@ -200,7 +216,18 @@ msg() {
     nb_opt5) printf '%s' "5) Update NetBird Relay binary (keeps config, no reinstall)" ;;
     nb_opt6) printf '%s' "6) Rollback NetBird Relay to previous backup" ;;
     nb_opt7) printf '%s' "7) Reconfigure NetBird Relay (run setup wizard)" ;;
+    nb_opt8) printf '%s' "8) Show NetBird configuration (secret & Management snippet)" ;;
     nb_opt0) printf '%s' "0) Back to main menu" ;;
+    nb_cfg_title) printf '%s' "==================== NetBird Relay Configuration ====================" ;;
+    nb_cfg_env) printf 'Environment file: %s' "$1" ;;
+    nb_cfg_addr) printf 'Exposed address: %s' "$1" ;;
+    nb_cfg_listen) printf 'Listen address: %s' "$1" ;;
+    nb_cfg_stun) printf 'STUN address: %s' "$1" ;;
+    nb_cfg_secret) printf 'Auth secret: %s' "$1" ;;
+    nb_cfg_cert) printf 'TLS certificate: %s' "$1" ;;
+    nb_cfg_key) printf 'TLS private key: %s' "$1" ;;
+    nb_cfg_mgmt) printf '%s' "Merge into NetBird Management config.yaml:" ;;
+    nb_cfg_extra) printf '%s' "If this is an additional node, append:" ;;
     alma_menu_title) printf '%s' "Alma Relay Management" ;;
     alma_access_open) printf '%s' "Public (no registration key)" ;;
     alma_access_key) printf '%s' "Protected (registration key set)" ;;
@@ -475,14 +502,63 @@ rollback_netbird_binary() {
   echo "$(msg rollback_done)"
 }
 
+show_netbird_config() {
+  if [[ ! -r "$ENV_FILE" ]]; then
+    echo "$(msg nb_not_installed_hint)"
+    return 1
+  fi
+  local exposed listen domain stun secret cert key stun_uri
+  exposed="$(get_relay_exposed)"
+  listen="$(read_env_value "$ENV_FILE" "NB_LISTEN_ADDRESS")"
+  domain="$(get_relay_domain)"
+  stun="$(get_stun_port)"
+  secret="$(read_env_value "$ENV_FILE" "NB_AUTH_SECRET")"
+  cert="$(read_env_value "$ENV_FILE" "NB_TLS_CERT_FILE")"
+  key="$(read_env_value "$ENV_FILE" "NB_TLS_KEY_FILE")"
+
+  if [[ -n "$domain" && -n "$stun" ]]; then
+    stun_uri="stun:${domain}:${stun}"
+  else
+    stun_uri="-"
+  fi
+
+  cat <<EOF
+$(msg nb_cfg_title)
+$(msg nb_cfg_env "$ENV_FILE")
+$(msg nb_cfg_addr "${exposed:--}")
+$(msg nb_cfg_listen "${listen:--}")
+$(msg nb_cfg_stun "$stun_uri")
+$(msg nb_cfg_secret "${secret:--}")
+$(msg nb_cfg_cert "${cert:--}")
+$(msg nb_cfg_key "${key:--}")
+
+$(msg nb_cfg_mgmt)
+server:
+  relays:
+    addresses:
+      - "${exposed:--}"
+    secret: "${secret:--}"
+  stuns:
+    - uri: "${stun_uri}"
+      proto: udp
+
+$(msg nb_cfg_extra)
+relays.addresses:
+  - "${exposed:--}"
+================================================================
+EOF
+}
+
 print_netbird_status_block() {
-  local state_label ver exposed stun
+  local state_label ver exposed stun secret
   state_label="$(get_netbird_state_label)"
   ver="$(get_netbird_version)"
   exposed="$(get_relay_exposed)"
   exposed="${exposed:--}"
   stun="$(get_stun_port)"
   stun="${stun:--}"
+  secret="$(read_env_value "$ENV_FILE" "NB_AUTH_SECRET")"
+  secret="${secret:--}"
 
   cat <<EOF
 =================================================
@@ -492,6 +568,7 @@ $(msg nb_info_status "$state_label")
 $(msg nb_info_version "$ver")
 $(msg nb_info_addr "$exposed")
 $(msg nb_info_stun "$stun")
+$(msg nb_info_secret "$secret")
 -------------------------------------------------
 $(msg nb_opt1)
 $(msg nb_opt2)
@@ -500,6 +577,7 @@ $(msg nb_opt4)
 $(msg nb_opt5)
 $(msg nb_opt6)
 $(msg nb_opt7)
+$(msg nb_opt8)
 $(msg nb_opt0)
 =================================================
 EOF
@@ -520,6 +598,7 @@ manage_netbird_relay() {
       5) update_netbird_binary || true ;;
       6) rollback_netbird_binary || true ;;
       7) run_install || true ;;
+      8) show_netbird_config || true ;;
       0) return 0 ;;
       *) echo "$(msg invalid_opt "$sub_choice")" ;;
     esac
@@ -746,22 +825,20 @@ EOF
 }
 
 print_menu() {
-  local nb_state nb_ver nb_addr alma_state alma_ver alma_url
+  local nb_state nb_ver alma_state alma_ver
   nb_state="$(get_netbird_state_label)"
   nb_ver="$(get_netbird_version)"
-  nb_addr="$(get_relay_exposed)"
-  nb_addr="${nb_addr:--}"
   alma_state="$(get_alma_state_label)"
   alma_ver="$(get_alma_version)"
-  alma_url="$(get_alma_url_label)"
 
   clear || true
   cat <<EOF
 =================================================
          $(msg menu_title)
 =================================================
-NetBird Relay : ${nb_state}  ${nb_ver}  (${nb_addr})
-Alma Relay    : ${alma_state}  ${alma_ver}  (${alma_url})
+$(msg menu_script_ver "$RELS_VERSION")
+NetBird Relay : ${nb_state}  ${nb_ver}
+Alma Relay    : ${alma_state}  ${alma_ver}
 -------------------------------------------------
 $(msg main_opt1)
 $(msg main_opt2)
