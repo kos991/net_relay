@@ -118,6 +118,8 @@ msg() {
       alma_info_version) printf '当前版本：%s' "$1" ;;
       alma_info_port) printf '监听端口：%s' "$1" ;;
       alma_info_access) printf '访问模式：%s' "$1" ;;
+      alma_info_key) printf '访问密钥：%s' "$1" ;;
+      alma_key_none) printf '%s' "未设置（公开访问）" ;;
       alma_info_url) printf '访问地址：%s' "$1" ;;
       alma_opt1) printf '%s' "1) 查看详细服务状态" ;;
       alma_opt2) printf '%s' "2) 查看实时日志" ;;
@@ -206,6 +208,8 @@ msg() {
     alma_info_version) printf 'Version: %s' "$1" ;;
     alma_info_port) printf 'Listen port: %s' "$1" ;;
     alma_info_access) printf 'Access mode: %s' "$1" ;;
+    alma_info_key) printf 'Registration key: %s' "$1" ;;
+    alma_key_none) printf '%s' "none (public access)" ;;
     alma_info_url) printf 'Relay URL: %s' "$1" ;;
     alma_opt1) printf '%s' "1) Show detailed service status" ;;
     alma_opt2) printf '%s' "2) Show service logs (real-time)" ;;
@@ -525,7 +529,7 @@ manage_netbird_relay() {
 }
 
 print_alma_status_block() {
-  local state_label ver port access_label url_label key_val
+  local state_label ver port access_label key_label url_label key_val
   state_label="$(get_alma_state_label)"
   ver="$(get_alma_version)"
   port="$(read_env_value "$ALMA_ENV_FILE" "PORT")"
@@ -535,10 +539,13 @@ print_alma_status_block() {
   if [[ -z "$port" ]]; then
     port="-"
     access_label="-"
+    key_label="-"
   elif [[ -n "$key_val" ]]; then
     access_label="$(msg alma_access_key)"
+    key_label="$key_val"
   else
     access_label="$(msg alma_access_open)"
+    key_label="$(msg alma_key_none)"
   fi
 
   cat <<EOF
@@ -549,6 +556,7 @@ $(msg alma_info_status "$state_label")
 $(msg alma_info_version "$ver")
 $(msg alma_info_port "$port")
 $(msg alma_info_access "$access_label")
+$(msg alma_info_key "$key_label")
 $(msg alma_info_url "$url_label")
 -------------------------------------------------
 $(msg alma_opt1)
@@ -609,6 +617,11 @@ configure_alma_interactive() {
     echo "$(msg alma_configured "https://${domain}:${new_port}")"
   else
     echo "$(msg alma_configured "https://<domain>:${new_port}")"
+  fi
+  if [[ -n "$new_key" ]]; then
+    echo "$(msg alma_info_key "$new_key")"
+  else
+    echo "$(msg alma_info_key "$(msg alma_key_none)")"
   fi
 }
 

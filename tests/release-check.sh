@@ -93,11 +93,7 @@ grep -Fq '当前版本：v1.4.0' <<<"$rels_alma_menu"
 grep -Fq '访问地址：https://resh.example.com:8787' <<<"$rels_alma_menu"
 grep -Fq '密钥保护（已设置访问密钥）' <<<"$rels_alma_menu"
 grep -Fq '6) 更新 Alma Relay 程序（保留配置，不重装）' <<<"$rels_alma_menu"
-if grep -Fq 'secret123' <<<"$rels_alma_menu"; then
-  echo "Alma Relay menu must not print registration key in plaintext." >&2
-  rm -rf "$rels_alma_tmp"
-  exit 1
-fi
+grep -Fq '访问密钥：secret123' <<<"$rels_alma_menu"
 rm -rf "$rels_alma_tmp"
 
 OPENRC_TEST_ENV="$(mktemp)"

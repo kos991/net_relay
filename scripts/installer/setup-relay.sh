@@ -101,7 +101,10 @@ msg() {
       alma_service_missing) printf '未找到 Alma Relay 服务定义文件：%s' "$1" ;;
       alma_start_failed) printf '%s' "Alma Relay 服务启动失败，请检查系统日志。" ;;
       summary_alma_ready) printf 'Alma 远程访问中继已就绪：https://%s:%s' "$1" "$2" ;;
-      summary_alma_note) printf '%s' "配置说明：在桌面端 Alma 设置 -> 远程访问中填入此地址，手机端即可随时直连。" ;;
+      summary_alma_key) printf 'Alma Relay 访问密钥：%s' "$1" ;;
+      summary_alma_key_open) printf '%s' "Alma Relay 访问密钥：未设置（公开访问）" ;;
+      summary_alma_env) printf 'Alma Relay 环境文件：%s' "$1" ;;
+      summary_alma_note) printf '%s' "配置说明：在桌面端 Alma 设置 -> 远程访问中选「使用自建中继」填入此地址；若设置了访问密钥，点「手动粘贴令牌」填入上方密钥并保存。" ;;
       summary_title) printf '%s' "配置完成" ;;
       group_create_label) printf '%s' "创建新的 Relay 节点组" ;;
       group_join_label) printf '%s' "加入已有的 Relay 节点组" ;;
@@ -183,7 +186,10 @@ msg() {
     alma_service_missing) printf 'Alma Relay service unit was not found: %s' "$1" ;;
     alma_start_failed) printf '%s' "Alma Relay service failed to start; check system logs." ;;
     summary_alma_ready) printf 'Alma Remote Access Relay is ready: https://%s:%s' "$1" "$2" ;;
-    summary_alma_note) printf '%s' "Instructions: In Alma Desktop -> Settings -> Remote Access, enter this address to connect directly from your phone." ;;
+    summary_alma_key) printf 'Alma Relay registration key: %s' "$1" ;;
+    summary_alma_key_open) printf '%s' "Alma Relay registration key: none (public access)" ;;
+    summary_alma_env) printf 'Alma Relay environment file: %s' "$1" ;;
+    summary_alma_note) printf '%s' "Instructions: In Alma Desktop -> Settings -> Remote Access, choose self-hosted relay and enter this URL. If a registration key is set, paste it manually and save." ;;
     summary_title) printf '%s' "Setup completed" ;;
     group_create_label) printf '%s' "create a new relay node group" ;;
     group_join_label) printf '%s' "join an existing relay node group" ;;
@@ -685,10 +691,18 @@ $(msg common_commands)
 EOF
 
   if [[ "${ALMA_ENABLED:-0}" == "1" ]]; then
+    local alma_key_line
+    if [[ -n "${ALMA_KEY:-}" ]]; then
+      alma_key_line="$(msg summary_alma_key "$ALMA_KEY")"
+    else
+      alma_key_line="$(msg summary_alma_key_open)"
+    fi
     cat <<EOF
 
 ==================== Alma Relay ====================
 $(msg summary_alma_ready "$RELAY_DOMAIN" "$ALMA_PORT")
+${alma_key_line}
+$(msg summary_alma_env "$ALMA_ENV_FILE")
 $(msg summary_alma_note)
 ====================================================
 EOF
