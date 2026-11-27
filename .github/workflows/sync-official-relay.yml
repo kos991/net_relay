@@ -58,6 +58,15 @@ jobs:
             current_alma_tag="$(cat .github/alma-relay-upstream.sha)"
           fi
 
+          git fetch --tags --force origin 2>/dev/null || true
+          latest_release_tag="$(git tag -l 'v1.0.*' --sort=-v:refname | head -n 1 || true)"
+          scripts_changed=false
+          if [ -n "$latest_release_tag" ]; then
+            if [ -n "$(git log "${latest_release_tag}..HEAD" --oneline --no-merges -- main.sh scripts/ packaging/ worker/ || true)" ]; then
+              scripts_changed=true
+            fi
+          fi
+
           changed=false
           if [ "$latest_tag" != "$current_tag" ]; then
             changed=true
@@ -67,9 +76,14 @@ jobs:
             changed=true
           fi
 
+          if [ "$scripts_changed" = "true" ]; then
+            changed=true
+          fi
+
           {
             echo "latest_tag=${latest_tag}"
             echo "latest_alma_tag=${latest_alma_tag}"
+            echo "scripts_changed=${scripts_changed}"
             echo "changed=${changed}"
           } >> "$GITHUB_OUTPUT"
 
