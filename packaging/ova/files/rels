@@ -820,6 +820,61 @@ parse_cert_epoch() {
   return 1
 }
 
+find_acme_sh() {
+  if command -v acme.sh >/dev/null 2>&1; then
+    command -v acme.sh
+    return 0
+  fi
+  if [[ -x /root/.acme.sh/acme.sh ]]; then
+    printf '%s' "/root/.acme.sh/acme.sh"
+    return 0
+  fi
+  if [[ -n "${HOME:-}" && -x "${HOME}/.acme.sh/acme.sh" ]]; then
+    printf '%s' "${HOME}/.acme.sh/acme.sh"
+    return 0
+  fi
+  return 1
+}
+
+has_acme_cronjob() {
+  if crontab -l 2>/dev/null | grep -Eq '(^|[^[:alnum:]_])acme\.sh([^[:alnum:]_]|$)|\.acme\.sh'; then
+    return 0
+  fi
+  if grep -Rqs 'acme\.sh' /etc/cron.d /etc/periodic /etc/crontabs /var/spool/cron /var/spool/cron/crontabs 2>/dev/null; then
+    return 0
+  fi
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-timers --all 2>/dev/null | grep -qi 'acme'; then
+    return 0
+  fi
+  return 1
+}
+
+ensure_acme_cronjob_if_root() {
+  local acme="$1"
+  [[ "${EUID:-$(id -u)}" -eq 0 ]] || return 1
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable --now cron >/dev/null 2>&1 || systemctl enable --now crond >/dev/null 2>&1 || true
+  elif command -v rc-update >/dev/null 2>&1; then
+    rc-update add crond default >/dev/null 2>&1 || true
+    service crond start >/dev/null 2>&1 || true
+  fi
+
+  HOME=/root "$acme" --install-cronjob >/dev/null 2>&1 || true
+  if has_acme_cronjob; then
+    return 0
+  fi
+
+  if command -v crontab >/dev/null 2>&1; then
+    {
+      crontab -l 2>/dev/null || true
+      printf '17 3 * * * "%s" --cron --home /root/.acme.sh >/dev/null 2>&1\n' "$acme"
+    } | crontab - >/dev/null 2>&1 || true
+  fi
+
+  has_acme_cronjob
+}
+
 show_certificate_status() {
   load_env_file
 
@@ -845,13 +900,10 @@ show_certificate_status() {
     fi
   fi
 
-  local has_acme=0
-  if command -v acme.sh >/dev/null 2>&1 || [[ -x /root/.acme.sh/acme.sh || -x "${HOME}/.acme.sh/acme.sh" ]]; then
-    has_acme=1
-  fi
-  if [[ "$has_acme" == "1" ]]; then
-    if crontab -l 2>/dev/null | grep -Eq '(^|[^[:alnum:]_])acme\.sh([^[:alnum:]_]|$)|\.acme\.sh' \
-      || grep -Rqs 'acme\.sh' /etc/cron.d /etc/periodic /var/spool/cron/crontabs 2>/dev/null; then
+  local acme_bin=""
+  acme_bin="$(find_acme_sh 2>/dev/null || true)"
+  if [[ -n "$acme_bin" ]]; then
+    if has_acme_cronjob || ensure_acme_cronjob_if_root "$acme_bin"; then
       renewal_status="$(msg acme_cron_ok)"
     else
       renewal_status="$(msg acme_cron_missing)"

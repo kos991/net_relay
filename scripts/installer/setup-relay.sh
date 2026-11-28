@@ -412,6 +412,37 @@ ensure_acme_sh() {
   printf '%s' "${ACME_HOME}/acme.sh"
 }
 
+has_acme_cronjob() {
+  if run_as_root crontab -l 2>/dev/null | grep -Eq '(^|[^[:alnum:]_])acme\.sh([^[:alnum:]_]|$)|\.acme\.sh'; then
+    return 0
+  fi
+  if grep -Rqs 'acme\.sh' /etc/cron.d /etc/periodic /etc/crontabs /var/spool/cron /var/spool/cron/crontabs 2>/dev/null; then
+    return 0
+  fi
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-timers --all 2>/dev/null | grep -qi 'acme'; then
+    return 0
+  fi
+  return 1
+}
+
+ensure_acme_cronjob() {
+  local acme="$1"
+  ensure_cron_service
+  if has_acme_cronjob; then
+    return 0
+  fi
+  run_as_root env HOME=/root "$acme" --install-cronjob >/dev/null 2>&1 || true
+  if has_acme_cronjob; then
+    return 0
+  fi
+  if command -v crontab >/dev/null 2>&1; then
+    {
+      run_as_root crontab -l 2>/dev/null || true
+      printf '17 3 * * * "%s" --cron --home "%s" >/dev/null 2>&1\n' "$acme" "$ACME_HOME"
+    } | run_as_root crontab - >/dev/null 2>&1 || true
+  fi
+}
+
 issue_cloudflare_certificate() {
   local domain="$1"
   local cert_file="$2"
@@ -429,7 +460,7 @@ issue_cloudflare_certificate() {
 
   local issue_rc=0
   run_as_root env HOME=/root "$acme" --set-default-ca --server letsencrypt
-  run_as_root env HOME=/root "$acme" --install-cronjob >/dev/null 2>&1 || true
+  ensure_acme_cronjob "$acme"
   run_as_root env HOME=/root CF_Token="$CF_API_TOKEN" "$acme" --issue --dns dns_cf -d "$domain" --keylength ec-256 || issue_rc=$?
   if (( issue_rc != 0 && issue_rc != 2 )); then
     return "$issue_rc"

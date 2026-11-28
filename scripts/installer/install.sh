@@ -233,6 +233,58 @@ ensure_scheduler() {
   fi
 }
 
+find_acme_sh() {
+  if command -v acme.sh >/dev/null 2>&1; then
+    command -v acme.sh
+    return 0
+  fi
+  if run_as_root test -x /root/.acme.sh/acme.sh 2>/dev/null; then
+    printf '%s' "/root/.acme.sh/acme.sh"
+    return 0
+  fi
+  if [[ -n "${HOME:-}" && -x "${HOME}/.acme.sh/acme.sh" ]]; then
+    printf '%s' "${HOME}/.acme.sh/acme.sh"
+    return 0
+  fi
+  return 1
+}
+
+has_acme_cronjob() {
+  if run_as_root crontab -l 2>/dev/null | grep -Eq '(^|[^[:alnum:]_])acme\.sh([^[:alnum:]_]|$)|\.acme\.sh'; then
+    return 0
+  fi
+  if grep -Rqs 'acme\.sh' /etc/cron.d /etc/periodic /etc/crontabs /var/spool/cron /var/spool/cron/crontabs 2>/dev/null; then
+    return 0
+  fi
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-timers --all 2>/dev/null | grep -qi 'acme'; then
+    return 0
+  fi
+  return 1
+}
+
+ensure_acme_cronjob() {
+  local acme=""
+  acme="$(find_acme_sh 2>/dev/null || true)"
+  [[ -n "$acme" ]] || return 0
+
+  ensure_scheduler
+  if has_acme_cronjob; then
+    return 0
+  fi
+
+  run_as_root env HOME=/root "$acme" --install-cronjob >/dev/null 2>&1 || true
+  if has_acme_cronjob; then
+    return 0
+  fi
+
+  if command -v crontab >/dev/null 2>&1; then
+    {
+      run_as_root crontab -l 2>/dev/null || true
+      printf '17 3 * * * "%s" --cron --home /root/.acme.sh >/dev/null 2>&1\n' "$acme"
+    } | run_as_root crontab - >/dev/null 2>&1 || true
+  fi
+}
+
 download_file() {
   local url="$1"
   local output="$2"
@@ -465,6 +517,7 @@ update_scripts_only() (
     run_as_root ln -sf "$RELS_PATH" /usr/local/bin/rels
   fi
   complete=1
+  ensure_acme_cronjob || true
   log "Scripts updated successfully (including rels); no configuration wizard was started."
 )
 
@@ -491,6 +544,7 @@ update_netbird_only() {
   package_file="$(download_relay_package "$arch" "$tmp_dir")"
   install_relay_binary "$package_file"
   restart_if_active netbird-relay
+  ensure_acme_cronjob || true
   log "$(msg netbird_updated "$BIN_PATH")"
 }
 
