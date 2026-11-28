@@ -350,9 +350,15 @@ jobs:
 
           git fetch --tags --force origin 2>/dev/null || true
           prev_tag="$(git tag -l "v1.0.*" --sort=-v:refname | grep -Fvx "${tag}" | head -n 1 || true)"
-          script_commits=""
+          all_script_commits=""
+          fix_commits=""
+          other_commits=""
           if [ -n "${prev_tag}" ]; then
-            script_commits="$(git log "${prev_tag}..HEAD" --oneline -- scripts/ packaging/ worker/ .github/ || true)"
+            all_script_commits="$(git log "${prev_tag}..HEAD" --no-merges --pretty=format:'- %s (%h)' -- main.sh scripts/ packaging/ worker/ .github/workflows/ || true)"
+            if [ -n "${all_script_commits}" ]; then
+              fix_commits="$(printf '%s\n' "${all_script_commits}" | grep -Ei '^- (fix(\([^)]*\))?:|.*修复)' || true)"
+              other_commits="$(printf '%s\n' "${all_script_commits}" | grep -Eiv '^- (fix(\([^)]*\))?:|.*修复)' || true)"
+            fi
           fi
 
           cat > release/RELEASE_NOTES.md <<EOF
@@ -368,8 +374,28 @@ jobs:
           ## Release channel
 
           - Channel: stable (\`v1.0.N\` only).
+          - Management script version: ${tag}
           - NetBird Relay upstream ref: ${NETBIRD_RELAY_REF}
           - Alma Relay upstream ref: ${ALMA_RELAY_REF}
+          EOF
+
+          if [ -n "${fix_commits}" ]; then
+            cat >> release/RELEASE_NOTES.md <<EOF
+
+          ## Bug Fixes
+          ${fix_commits}
+          EOF
+          fi
+
+          if [ -n "${other_commits}" ]; then
+            cat >> release/RELEASE_NOTES.md <<EOF
+
+          ## Script & Integration Updates
+          ${other_commits}
+          EOF
+          fi
+
+          cat >> release/RELEASE_NOTES.md <<EOF
 
           ## Services & Ports
 
@@ -387,14 +413,6 @@ jobs:
           - Services run as dedicated service users (netbird-relay and alma-relay).
           - Verify downloaded artifacts with SHA256SUMS before production use.
           EOF
-
-          if [ -n "${script_commits}" ]; then
-            cat >> release/RELEASE_NOTES.md <<EOF
-
-          ## Integration updates
-          ${script_commits}
-          EOF
-          fi
 
           if [ -n "${netbird_notes}" ]; then
             cat >> release/RELEASE_NOTES.md <<EOF
